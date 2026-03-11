@@ -51,6 +51,13 @@ coverage.xml
 .pytest_cache/
 cover/
 
+# Factor engine output
+backtest_results/
+factor_docs/md/
+factor_values/
+config_dev.ini
+
+
 # Translations
 *.mo
 *.pot
