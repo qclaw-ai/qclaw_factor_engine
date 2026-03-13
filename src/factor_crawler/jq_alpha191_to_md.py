@@ -159,9 +159,12 @@ def _to_internal_dsl(raw: RawFactor) -> str:
     formula = formula.replace("，", ",")
     formula = formula.replace("DELA Y", "DELAY")
     formula = formula.replace("HI GH", "HIGH")
+    formula = formula.replace("CL OSE", "CLOSE")
     # HTML 转义残留：RET\<0 之类，统一还原成 RET<0
     formula = formula.replace(r"RET\<0", "RET<0")
     formula = formula.replace(r"\<", "<")
+    # 全角问号 -> 半角，避免 ？ 出现在三目表达式里
+    formula = formula.replace("？", "?")
 
     # 2) 字段归一化：统一成 engine 里用的小写字段名
     field_replacements = {
@@ -200,6 +203,8 @@ def _to_internal_dsl(raw: RawFactor) -> str:
 
     # 替换 alpha191 的幂运算符 ^ 为 Python 的 **
     formula = formula.replace("^", "**")
+    # JQ 文档里的 ./ 和 .* 对应 element-wise 运算，DSL 里用普通 / 和 *
+    formula = formula.replace("./", "/").replace(".*", "*")
 
     # 3) 逻辑运算符和比较运算符规范化
     #   - alpha191: && / || / =

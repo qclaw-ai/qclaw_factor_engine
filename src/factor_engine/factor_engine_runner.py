@@ -70,12 +70,14 @@ def _ma(series: pd.Series, window: int, m: int | None = None) -> pd.Series:
 
     兼容 alpha191 中 SMA/SMEAN 等 3 参数形式，这里先忽略 m，按简单 MA 处理。
     """
-    return (
+    ma = (
         series.groupby(level="stock_code")
         .rolling(window, min_periods=window)
         .mean()
         .reset_index(level=0, drop=True)
     )
+    # 对齐原始索引，避免与原 series 比较时报 "Can only compare identically-labeled Series objects"
+    return ma.reindex(series.index)
 
 
 def _ref(series: pd.Series, n: int) -> pd.Series:
@@ -128,22 +130,26 @@ def _ts_sum(series: pd.Series, window: int) -> pd.Series:
 
 def _ts_max(series: pd.Series, window: int) -> pd.Series:
     """时间序列滚动最大值（按股票分组），对应 alpha191 的 TS_MAX"""
-    return (
+    maxed = (
         series.groupby(level="stock_code")
         .rolling(window, min_periods=window)
         .max()
         .reset_index(level=0, drop=True)
     )
+    # 对齐原始索引，避免后续比较时报 index 不一致
+    return maxed.reindex(series.index)
 
 
 def _ts_min(series: pd.Series, window: int) -> pd.Series:
     """时间序列滚动最小值（按股票分组），对应 alpha191 的 TS_MIN"""
-    return (
+    mined = (
         series.groupby(level="stock_code")
         .rolling(window, min_periods=window)
         .min()
         .reset_index(level=0, drop=True)
     )
+    # 对齐原始索引，避免后续比较时报 index 不一致
+    return mined.reindex(series.index)
 
 
 def _ts_rank(series: pd.Series, window: int) -> pd.Series:
@@ -164,18 +170,31 @@ def _ts_rank(series: pd.Series, window: int) -> pd.Series:
         )
         return r
 
-    return (
+    out = (
         series.groupby(level="stock_code")
         .apply(_group_ts_rank)
         .reset_index(level=0, drop=True)
     )
+    # 对齐原始索引，避免后续组合时报 index 不一致
+    return out.reindex(series.index)
 
 
-def _std(series: pd.Series, window: int) -> pd.Series:
-    """时间序列滚动标准差（按股票分组），对应 alpha191 的 STD/STDDEV"""
+def _std(series: pd.Series, window: int | None = None) -> pd.Series:
+    """时间序列滚动标准差（按股票分组），对应 alpha191 的 STD/STDDEV
+
+    - STD(A, n)：过去 n 日滚动标准差；
+    - STD(A)：若未给窗口，则用 expanding 标准差（从起始到当前）。
+    """
+    g = series.groupby(level="stock_code")
+    if window is None:
+        return (
+            g.expanding(min_periods=1)
+            .std()
+            .reset_index(level=0, drop=True)
+        )
+
     return (
-        series.groupby(level="stock_code")
-        .rolling(window, min_periods=window)
+        g.rolling(window, min_periods=window)
         .std()
         .reset_index(level=0, drop=True)
     )
@@ -302,11 +321,13 @@ def _corr(x: pd.Series, y: pd.Series, window: int) -> pd.Series:
     def _corr_group(g: pd.DataFrame) -> pd.Series:
         return g["x"].rolling(window, min_periods=window).corr(g["y"])
 
-    return (
+    out = (
         df_xy.groupby(level="stock_code")
         .apply(_corr_group)
         .reset_index(level=0, drop=True)
     )
+    # 对齐原始索引，避免比较/组合时报 "Can only compare identically-labeled Series objects"
+    return out.reindex(x.index)
 
 
 def _covariance(x: pd.Series, y: pd.Series, window: int) -> pd.Series:
@@ -335,14 +356,20 @@ def _prod(series: pd.Series, window: int) -> pd.Series:
 
 def _count(cond: pd.Series, window: int) -> pd.Series:
     """时间序列条件计数：过去 n 日内 condition 为真次数，对应 COUNT(condition, n)"""
-    # cond 可能是 bool / 0-1 数值
-    s = cond.astype(float)
-    return (
-        s.groupby(level="stock_code")
-        .rolling(window, min_periods=window)
-        .sum()
-        .reset_index(level=0, drop=True)
-    )
+    # cond 可能是 bool / 0-1 数值，也可能是纯标量 True/False
+    if isinstance(cond, pd.Series):
+        s = cond.astype(float)
+        out = (
+            s.groupby(level="stock_code")
+            .rolling(window, min_periods=window)
+            .sum()
+            .reset_index(level=0, drop=True)
+        )
+        return out
+
+    # 标量条件：直接返回常数 Series，避免 'int' object has no attribute 'astype'
+    val = float(bool(cond))
+    return pd.Series(val, index=pd.Index([], name="idx"))
 
 
 def _regbeta(a: pd.Series, b: pd.Series, window: int) -> pd.Series:
@@ -520,18 +547,62 @@ def compute_factor_values(formula: str, price_df: pd.DataFrame) -> pd.Series:
     - 函数：MA(x, n), REF(x, n)
     - 运算：+ - * /
     """
-    # 衍生字段：VWAP / RET / 市场因子等
+    # 衍生字段：VWAP / RET / 市场因子 / 各类中间变量（DTM / DBM / TR / HD / LD 等）
     vwap = price_df["turnover"] / price_df["volume"]
-    # 日收益率：按股票分组的 close_pct_change
-    ret = price_df["close"].groupby(level="stock_code").pct_change()
+
+    open_ = price_df["open"]
+    high = price_df["high"]
+    low = price_df["low"]
+    close = price_df["close"]
+
+    # 日收益率：按股票分组的 close_pct_change（RET）
+    ret = close.groupby(level="stock_code").pct_change()
+
+    # 前一日价格：用于 RET / DTM / DBM / TR / HD / LD 等
+    prev_open = open_.groupby(level="stock_code").shift(1)
+    prev_close = close.groupby(level="stock_code").shift(1)
+    prev_high = high.groupby(level="stock_code").shift(1)
+    prev_low = low.groupby(level="stock_code").shift(1)
+
+    # DTM: (OPEN<=DELAY(OPEN,1)?0:MAX((HIGH-OPEN),(OPEN-DELAY(OPEN,1))))
+    cond_dtm_zero = (open_ <= prev_open) | prev_open.isna()
+    dtm_candidate1 = high - open_
+    dtm_candidate2 = open_ - prev_open
+    dtm_max = pd.concat([dtm_candidate1, dtm_candidate2], axis=1).max(axis=1)
+    dtm = pd.Series(0.0, index=price_df.index)
+    dtm[~cond_dtm_zero] = dtm_max[~cond_dtm_zero]
+
+    # DBM: (OPEN>=DELAY(OPEN,1)?0:MAX((OPEN-LOW),(OPEN-DELAY(OPEN,1))))
+    cond_dbm_zero = (open_ >= prev_open) | prev_open.isna()
+    dbm_candidate1 = open_ - low
+    dbm_candidate2 = open_ - prev_open
+    dbm_max = pd.concat([dbm_candidate1, dbm_candidate2], axis=1).max(axis=1)
+    dbm = pd.Series(0.0, index=price_df.index)
+    dbm[~cond_dbm_zero] = dbm_max[~cond_dbm_zero]
+
+    # TR: MAX(MAX(HIGH-LOW,ABS(HIGH-DELAY(CLOSE,1))),ABS(LOW-DELAY(CLOSE,1)))
+    tr_range1 = high - low
+    tr_range2 = (high - prev_close).abs()
+    tr_range3 = (low - prev_close).abs()
+    tr = pd.concat([tr_range1, tr_range2, tr_range3], axis=1).max(axis=1)
+
+    # HD: HIGH-DELAY(HIGH,1)
+    hd = high - prev_high
+
+    # LD: DELAY(LOW,1)-LOW
+    ld = prev_low - low
+
     # 占位的三因子：MKT、SMB、HML（未来可从外部因子表接入真实值）
     zeros_factor = pd.Series(0.0, index=price_df.index)
 
+    # SEQUENCE(n)：按文档含义代表“时间序列 1~n”，这里近似为每只股票自己的交易日序列 1,2,...
+    seq_index = price_df.groupby(level="stock_code").cumcount() + 1
+
     locals_dict = {
-        "open": price_df["open"],
-        "high": price_df["high"],
-        "low": price_df["low"],
-        "close": price_df["close"],
+        "open": open_,
+        "high": high,
+        "low": low,
+        "close": close,
         "volume": price_df["volume"],
         "turnover": price_df["turnover"],
         "VWAP": vwap,
@@ -541,6 +612,17 @@ def compute_factor_values(formula: str, price_df: pd.DataFrame) -> pd.Series:
         "MKT": zeros_factor,
         "SMB": zeros_factor,
         "HML": zeros_factor,
+        "BANCHMARKINDEXCLOSE": zeros_factor,
+        "BANCHMARKINDEXOPEN": zeros_factor,
+
+        # 时间序列辅助：SEQUENCE(n) —— 近似为每只股票的交易日序列
+        "SEQUENCE": lambda n, s=seq_index: s,
+        # DTM / DBM / TR / HD / LD：Alpha 相关文档里出现的中间量，这里按文档定义真实计算
+        "DTM": dtm,
+        "DBM": dbm,
+        "TR": tr,
+        "HD": hd,
+        "LD": ld,
         "MA": _ma,
         "REF": _ref,
 
@@ -612,6 +694,14 @@ def compute_factor_values(formula: str, price_df: pd.DataFrame) -> pd.Series:
         "highday": _highday,
         "lowday": _lowday,
         "sumac": _sumac,
+        "dtm": dtm,
+        "dbm": dbm,
+        "tr": tr,
+        "hd": hd,
+        "ld": ld,
+        "banchmarkindexclose": zeros_factor,
+        "banchmarkindexopen": zeros_factor,
+        "sequence": lambda n, s=seq_index: s,
     }
 
     # 使用受限 eval，仅提供我们需要的局部变量
