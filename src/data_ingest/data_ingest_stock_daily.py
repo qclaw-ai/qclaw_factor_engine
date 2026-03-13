@@ -105,7 +105,7 @@ def main():
         logger.error("解析股票池后得到的股票列表为空，请检查 data_ingest.universe / stock_codes 配置")
         return
 
-    logger.info(f"配置 - start_date={start_date}, end_date={end_date}, stock_codes={stock_codes}, adjust={adjust}")
+    logger.info(f"配置 - start_date={start_date}, end_date={end_date}, stock_codes数量={len(stock_codes)}, adjust={adjust}")
 
     db_manager = get_db_manager(config_file=config_file)
     session = db_manager.get_session()

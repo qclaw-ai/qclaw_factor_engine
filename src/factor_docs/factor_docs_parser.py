@@ -54,7 +54,9 @@ def parse_factor_md(path: str) -> Optional[FactorDefinition]:
     patterns = {
         "factor_id": re.compile(r"因子ID[:：]\s*(.+)"),
         "factor_name": re.compile(r"因子名称[:：]\s*(.+)"),
-        "formula": re.compile(r"(?:公式|公式\(DSL\))[:：]\s*(.+)"),
+        # 优先使用「公式(DSL)」，若不存在再退回「公式」
+        "formula_dsl": re.compile(r"公式\(DSL\)[:：]\s*(.+)"),
+        "formula_raw": re.compile(r"公式[:：]\s*(.+)"),
         "description": re.compile(r"描述[:：]\s*(.+)"),
         "factor_type": re.compile(r"因子类型[:：]\s*(.+)"),
         "test_universe": re.compile(r"(?:适用股票池|测试股票池)[:：]\s*(.+)"),
@@ -63,7 +65,21 @@ def parse_factor_md(path: str) -> Optional[FactorDefinition]:
         "source_url": re.compile(r"(?:来源URL|来源链接)[:：]\s*(.+)"),
     }
 
-    fields = {key: _extract_field(pat, content) for key, pat in patterns.items()}
+    raw_fields = {key: _extract_field(pat, content) for key, pat in patterns.items()}
+
+    # 公式字段：优先用 DSL，没有的话退回原始公式
+    formula = raw_fields.get("formula_dsl") or raw_fields.get("formula_raw")
+    fields = {
+        "factor_id": raw_fields.get("factor_id"),
+        "factor_name": raw_fields.get("factor_name"),
+        "formula": formula,
+        "description": raw_fields.get("description"),
+        "factor_type": raw_fields.get("factor_type"),
+        "test_universe": raw_fields.get("test_universe"),
+        "trading_cycle": raw_fields.get("trading_cycle"),
+        "factor_direction": raw_fields.get("factor_direction"),
+        "source_url": raw_fields.get("source_url"),
+    }
 
     # 关键字段检查
     critical_keys = ["factor_id", "factor_name", "formula", "factor_direction"]
