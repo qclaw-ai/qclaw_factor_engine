@@ -791,3 +791,126 @@
 > 这样设计后，系统既对“新来源/新思路”开放入口，又确保所有进入正式因子库的因子都经过可复现、可审计的标准化与回测流程。
 
 > 本文仅定义模块边界、配置项、数据表与 I/O 约定，不包含具体代码实现，便于后续按本草图拆分仓库结构与开发任务。
+
+---
+
+## 十、因子相关性矩阵模块（Redis）
+
+> 目标：为“策略工厂”的因子清单生成模块提供可复用的**因子相关性矩阵**，用于剔除高度相关因子；计算职责归因子工厂，策略工厂只读。
+
+### 10.1 模块职责概览 `factor_corr_matrix`
+
+- 从因子库读取当前有效因子集合（`factor_basic.is_valid = true`）；  
+- 在给定时间窗口上（如近 252 个交易日）读取各因子的历史截面值；  
+- 计算任意两因子的相关系数（MVP 阶段可用 Pearson 或 Spearman，二选一即可）；  
+- 将结果写入 Redis，key 约定为 `factor:corr:<yyyymmdd>`，供策略工厂读取。
+
+### 10.2 数据来源与前提约束
+
+- 因子集合：
+  - 来自 `factor_basic`：`SELECT factor_id FROM factor_basic WHERE is_valid = true`；
+- 因子值时间序列：
+  - 由现有因子流水线产出（例如：从因子值表、parquet 文件或其它中间产物中加载）；  
+  - 具体“因子值存储形态”不在本模块强制规定，只要求能得到类似结构：  
+    - index：`(trade_date, stock_code)`  
+    - columns：多个 `factor_id` 对应的 `factor_value`。
+
+> 说明：如果当前 MVP 阶段因子值尚未集中落库，可从各因子回测中间结果或文件系统构造一个临时 DataFrame，后续再统一为专门的因子值表。
+
+### 10.3 计算窗口与相关性定义（MVP）
+
+- 时间窗口：
+  - 建议使用**最近 252 个交易日**（约 1 年）作为默认计算窗口；  
+  - 具体起止日期由配置控制，例如：
+    - `corr_window_days = 252`
+    - 或 `corr_start_date = 2024-01-01`、`corr_end_date = today`。
+
+- 相关性定义：
+  - MVP 版本可以直接使用 **Pearson 相关系数**（`pandas.DataFrame.corr()` 默认实现）；  
+  - 如需对秩相关性更敏感，可以在后续版本切换为 Spearman，并在文档中注明。
+
+### 10.4 Redis 写入约定（与 `redis_conventions.md` 对齐）
+
+- Key 命名：
+  - `factor:corr:<yyyymmdd>`，例如：`factor:corr:20260316`；
+- Value 结构（MVP 建议 JSON 文本）：
+
+```json
+{
+  "as_of_date": "2026-03-16",
+  "window": "252d",
+  "corr": {
+    "FACTOR_FD_20260310_001": {
+      "FACTOR_JQ_20260310_001": 0.72,
+      "FACTOR_BQ_20260310_001": 0.10
+    },
+    "FACTOR_JQ_20260310_001": {
+      "FACTOR_FD_20260310_001": 0.72
+    }
+  }
+}
+```
+
+- 生命周期与清理：
+  - 每次计算成功后写入当日 key：`factor:corr:<today>`；  
+  - 保留最近 N 天（例如 30 天）的版本，其余通过脚本清理或 TTL 过期；  
+  - 策略工厂在读取时优先使用当日，如当日缺失则回退到最近一次存在的日期。
+
+### 10.5 配置项示例（可放在 ini / yaml 中）
+
+- INI 示例：
+
+```ini
+[factor_corr]
+enable = true
+window_days = 252
+min_overlap_days = 120
+redis_key_prefix = factor:corr
+keep_days = 30
+```
+
+- 字段含义：
+  - `enable`：是否开启相关性矩阵计算任务；  
+  - `window_days`：计算窗口长度；  
+  - `min_overlap_days`：两因子参与相关性计算所需的最小重叠有效天数，低于该值可视为“相关性不可用”；  
+  - `redis_key_prefix`：允许未来调整前缀；  
+  - `keep_days`：在 Redis 中保留多少天的历史 key。
+
+### 10.6 调度与运行方式（与 APScheduler 集成）
+
+- 调度建议：
+  - 每日收盘后或每日夜间定时运行一次，例如：`每天 03:00`；  
+  - 使用 APScheduler 或现有调度框架注册任务：`factor_corr_matrix.run()`。
+
+- 任务伪代码轮廓（仅做说明，不含具体实现细节）：
+
+```python
+def run_factor_corr_job(as_of_date: date):
+    # 1. 读取有效因子列表
+    factor_ids = load_valid_factors()  # from factor_basic
+
+    # 2. 加载给定窗口内的因子值矩阵 (date, stock) x factor_id
+    df_factors = load_factor_values(factor_ids, as_of_date, window_days)
+
+    # 3. 计算相关性矩阵
+    corr_matrix = df_factors.corr(method="pearson")
+
+    # 4. 序列化为 JSON 并写入 Redis
+    payload = build_corr_payload(corr_matrix, as_of_date, window_days)
+    redis_key = f"factor:corr:{as_of_date.strftime('%Y%m%d')}"
+    redis_client.set(redis_key, json.dumps(payload))
+
+    # 5. 清理过旧的 key（保留最近 keep_days 天）
+    cleanup_old_corr_keys(redis_client, prefix="factor:corr", keep_days=keep_days)
+```
+
+### 10.7 与策略工厂的接口边界
+
+- 因子工厂负责：
+  - 保证在约定时间内（例如每日凌晨）产出一份最新的 `factor:corr:<yyyymmdd>`；  
+  - 保证 value 结构遵循本节约定；  
+  - 在需要变更结构时先更新 `redis_conventions.md` 并做好向后兼容。
+
+- 策略工厂只做：
+  - 读取 `factor:corr:*`，按自身配置的阈值剔除高度相关因子；  
+  - 不写入 / 不修改任何 `factor:corr:*` key。
