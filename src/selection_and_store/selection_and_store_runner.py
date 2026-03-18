@@ -5,6 +5,8 @@ import os
 import sys
 from typing import Dict, Any
 
+from decimal import InvalidOperation
+
 # 把 common / factor_docs 加入路径
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -72,23 +74,41 @@ def _judge_pass(res: Dict[str, Any], th: Dict[str, Any]) -> bool:
     max_dd = res.get("max_drawdown")
     turnover = res.get("turnover")
 
-    def _ge(x, y):
-        return x is not None and y is not None and x >= y
+    def _ge(x, y, field_name: str):
+        if x is None or y is None:
+            return False
 
-    def _le(x, y):
-        return x is not None and y is not None and x <= y
+        try:
+            return x >= y
+        except InvalidOperation:
+            logger.warning(
+                f"字段 {field_name} 比较异常，x={x}, y={y}，视为不通过阈值判断"
+            )
+            return False
+
+    def _le(x, y, field_name: str):
+        if x is None or y is None:
+            return False
+
+        try:
+            return x <= y
+        except InvalidOperation:
+            logger.warning(
+                f"字段 {field_name} 比较异常，x={x}, y={y}，视为不通过阈值判断"
+            )
+            return False
 
     # 只在阈值非空时启用该约束
-    if th.get("ic_min") is not None and not _ge(ic_value, th["ic_min"]):
+    if th.get("ic_min") is not None and not _ge(ic_value, th["ic_min"], "ic_value"):
         return False
-    if th.get("ic_ir_min") is not None and not _ge(ic_ir, th["ic_ir_min"]):
+    if th.get("ic_ir_min") is not None and not _ge(ic_ir, th["ic_ir_min"], "ic_ir"):
         return False
-    if th.get("sharpe_min") is not None and not _ge(sharpe, th["sharpe_min"]):
+    if th.get("sharpe_min") is not None and not _ge(sharpe, th["sharpe_min"], "sharpe_ratio"):
         return False
     # max_drawdown_max 为“最大允许回撤”（负数），回测结果需要 >= 该阈值
-    if th.get("max_drawdown_max") is not None and not _ge(max_dd, th["max_drawdown_max"]):
+    if th.get("max_drawdown_max") is not None and not _ge(max_dd, th["max_drawdown_max"], "max_drawdown"):
         return False
-    if th.get("turnover_max") is not None and not _le(turnover, th["turnover_max"]):
+    if th.get("turnover_max") is not None and not _le(turnover, th["turnover_max"], "turnover"):
         return False
 
     return True
@@ -131,11 +151,14 @@ def _upsert_factor_files(
     )
 
 
-def run_selection_and_store(config_file: str = "selection_and_store/config.ini") -> None:
+def run_selection_and_store(config_file: str = "src/selection_and_store/config.ini") -> None:
     logger.info("启动 selection_and_store_runner")
 
     cfg = Config(config_file=config_file)
     scene = cfg.get("selection", "scene", fallback="A_stock_daily_single_factor")
+    
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    
     backtest_results_dir = cfg.get(
         "paths",
         "backtest_results_dir",
@@ -200,20 +223,22 @@ def run_selection_and_store(config_file: str = "selection_and_store/config.ini")
             fd = factor_meta.get(factor_id)
             if fd:
                 # 存相对路径，避免把本机绝对路径写进 DB
-                project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-                doc_path = os.path.relpath(fd.doc_path, start=project_root)
+                project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+                doc_path = os.path.relpath(fd.doc_path, start=project_root).replace("\\", "/")
             else:
                 doc_path = None
-            json_path = os.path.join(backtest_results_dir, f"{factor_id}_backtest.json")
-            if not os.path.exists(json_path):
-                logger.warning(f"未找到回测 JSON 文件: {json_path}")
-                json_path = None
+            # 生成相对仓库根的 POSIX 路径
+            json_abs_path = os.path.join(project_root, backtest_results_dir, f"{factor_id}_backtest.json")
+            json_rel_path = os.path.relpath(json_abs_path, start=project_root).replace("\\", "/")
+            if not os.path.exists(json_abs_path):
+                logger.warning(f"未找到回测 JSON 文件: {json_abs_path}")
+                json_rel_path = None
 
             _upsert_factor_files(
                 session=session,
                 factor_id=factor_id,
                 doc_path=doc_path,
-                backtest_json_path=json_path,
+                backtest_json_path=json_rel_path,
             )
 
         session.commit()

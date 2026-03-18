@@ -7,6 +7,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# 以当前文件为基准推导 src 和项目根目录，避免依赖运行时工作目录
+SRC_DIR = os.path.dirname(os.path.dirname(__file__))
+PROJECT_ROOT = os.path.dirname(SRC_DIR)
+
 
 class Config:
     """配置加载类（从 ini 文件读取配置，支持 dev/prod 切换）
@@ -20,12 +24,13 @@ class Config:
         logger.info("初始化配置加载类")
         self.config = configparser.ConfigParser()
         self.default_section = default_section
-
+        
         # 根据 ENV 选择配置文件（和老项目保持一致）
         if os.environ.get("ENV") != "prod":
             if config_file.endswith(".ini") and not config_file.endswith("_dev.ini"):
                 config_file = config_file.replace(".ini", "_dev.ini")
             logger.info(f"开发环境，使用配置文件: {config_file}")
+
 
         # 从文件加载配置
         if os.path.exists(config_file):

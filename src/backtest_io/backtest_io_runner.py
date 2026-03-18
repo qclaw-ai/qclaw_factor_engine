@@ -11,7 +11,7 @@ from typing import Dict
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from sqlalchemy import text
-
+from pathlib import Path
 from backtest_core.backtest_core_runner import run_backtest, BacktestResult
 from common.config import Config
 from common.db import get_db_manager
@@ -122,6 +122,43 @@ def _insert_factor_backtest(session, res: BacktestResult) -> None:
     )
 
 
+
+def _upsert_factor_values_path(session, factor_id: str, factor_output_dir: str) -> None:
+    """
+    在 factor_output_dir 中查找以 <factor_id>_ 开头的 CSV 文件，
+    用找到的真实文件名写入 factor_files.factor_values_path。
+    """
+    root_dir = Path(factor_output_dir)
+    pattern = f"{factor_id}_*.csv"
+    matches = list(root_dir.glob(pattern))
+    if not matches:
+        # 找不到就直接返回，不影响主流程
+        logger.warning("未在 %s 下找到因子 %s 的 CSV 文件", factor_output_dir, factor_id)
+        return
+
+    # 如果有多个，按文件名排序取最新一个
+    matches.sort()
+    csv_path = matches[-1]
+
+    # 计算相对项目根目录路径
+    project_root = Path(__file__).resolve().parents[2]
+    try:
+        rel_path = csv_path.resolve().relative_to(project_root).as_posix()
+    except ValueError:
+        rel_path = csv_path.as_posix()
+
+    session.execute(
+        text(
+            """
+            INSERT INTO factor_files (factor_id, doc_path, factor_values_path)
+            VALUES (:factor_id, '', :factor_values_path)
+            ON CONFLICT (factor_id) DO UPDATE
+            SET factor_values_path = EXCLUDED.factor_values_path
+            """
+        ),
+        {"factor_id": factor_id, "factor_values_path": rel_path},
+    )
+
 def _write_backtest_json(
     base_dir: str,
     res: BacktestResult,
@@ -161,8 +198,8 @@ def _write_backtest_json(
 
 
 def run_backtest_io(
-    io_config_file: str = "backtest_io/config.ini",
-    core_config_file: str = "backtest_core/config.ini",
+    io_config_file: str = "src/backtest_io/config.ini",
+    core_config_file: str = "src/backtest_core/config.ini",
 ) -> None:
     logger.info("启动 backtest_io_runner")
 
@@ -172,6 +209,13 @@ def run_backtest_io(
         "backtest_results_dir",
         fallback="backtest_results",
     )
+    
+    core_cfg = Config(config_file=core_config_file)
+    factor_output_dir = core_cfg.get(
+        "backtest",
+        "factor_output_dir",
+        fallback="factor_values",
+    ).strip()
 
     factor_meta = _load_factor_meta()
     logger.info(f"已加载 {len(factor_meta)} 个因子元数据")
@@ -202,6 +246,13 @@ def run_backtest_io(
 
             # 3) 插入 factor_backtest
             _insert_factor_backtest(session, res)
+            
+            # 4) 更新 factor_files.factor_values_path
+            _upsert_factor_values_path(
+                session=session,
+                factor_id=res.factor_id,
+                factor_output_dir=factor_output_dir,
+            )
 
         session.commit()
         logger.info("backtest_io 全部写入 DB 成功")
