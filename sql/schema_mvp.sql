@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS stock_daily (
     close        numeric,                       -- 收盘价
     volume       numeric,                       -- 成交量
     turnover     numeric,                       -- 成交额
+    pre_close    numeric,                       -- 前收盘价
+    high_limit   numeric,                       -- 涨停价
+    low_limit    numeric,                       -- 跌停价
+    "return"     numeric,                       -- 日收益（万分）
+    is_suspend   boolean,                      -- 是否停牌
+    multiple     integer,                      -- 期货合约乘数（股票=1）
+    update_time  timestamp,                    -- 更新时间
     PRIMARY KEY (trade_date, stock_code)        -- 复合主键，对应 (trade_date, stock_code) 复合索引
 );
 

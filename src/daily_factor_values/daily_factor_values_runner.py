@@ -1,0 +1,309 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+日更线：按「因子值所属交易日 T」生成单日因子长表 CSV，并更新 factor_files.factor_values_path_daily。
+
+- 与评估线隔离：不修改 factor_values_path（月更/大回测由 backtest_io 维护）。
+- 复用 factor_engine_runner 的行情加载与公式计算、截面去极值+标准化。
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from pathlib import Path
+from typing import List, Set
+
+import pandas as pd
+from sqlalchemy import text
+
+# 对齐：把 src 加入路径（common / factor_engine / factor_docs）
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
+from common.config import Config
+from common.db import get_db_manager
+from common.utils import setup_logger
+from factor_docs.factor_docs_parser import load_all_factors, FactorDefinition
+from factor_engine.factor_engine_runner import (
+    _load_stock_daily,
+    compute_factor_values,
+    winsorize_and_standardize,
+)
+
+logger = setup_logger("daily_factor_values_runner", "logs/daily_factor_values_runner.log")
+
+
+def _project_root() -> Path:
+    """qclaw_factor_engine 仓库根目录（src 的上一级）。"""
+    return Path(__file__).resolve().parents[2]
+
+
+def _load_valid_factor_ids_from_db(session) -> List[str]:
+    """从 factor_basic 读取 is_valid = TRUE 的因子列表。"""
+    sql = text(
+        """
+        SELECT factor_id
+        FROM factor_basic
+        WHERE is_valid = TRUE
+        ORDER BY factor_id
+        """
+    )
+    rows = session.execute(sql).fetchall()
+    return [r[0] for r in rows]
+
+
+def _load_all_factor_ids_from_basic(session) -> List[str]:
+    """从 factor_basic 读取全部 factor_id（含 is_valid=FALSE），用于与「全量回测有 CSV」对齐。"""
+    sql = text(
+        """
+        SELECT factor_id
+        FROM factor_basic
+        ORDER BY factor_id
+        """
+    )
+    rows = session.execute(sql).fetchall()
+    return [r[0] for r in rows]
+
+
+def _upsert_factor_values_path_daily(session, factor_id: str, rel_path_posix: str) -> None:
+    """
+    仅更新日更路径列；新行插入时用空串占位 factor_values_path，避免 NOT NULL 冲突。
+    若你库中 factor_values_path 无默认值且 NOT NULL，请保证该列允许 '' 或调整本 SQL。
+    """
+    session.execute(
+        text(
+            """
+            INSERT INTO factor_files (
+                factor_id,
+                doc_path,
+                factor_values_path,
+                factor_values_path_daily
+            )
+            VALUES (
+                :factor_id,
+                '',
+                '',
+                :factor_values_path_daily
+            )
+            ON CONFLICT (factor_id) DO UPDATE
+            SET factor_values_path_daily = EXCLUDED.factor_values_path_daily
+            """
+        ),
+        {
+            "factor_id": factor_id,
+            "factor_values_path_daily": rel_path_posix,
+        },
+    )
+
+
+def _parse_factor_ids_csv(raw: str) -> List[str]:
+    return [x.strip() for x in raw.split(",") if x.strip()]
+
+
+def run_daily_factor_values(
+    config_file: str,
+    trade_date: str,
+    lookback_days: int,
+    factor_ids_filter: List[str] | None,
+    scope: str = "valid_only",
+) -> None:
+    """
+    :param trade_date: 因子值所属交易日 T（YYYY-MM-DD），写入 CSV 的 trade_date 列。
+    :param lookback_days: 向前拉取行情的自然日天数，用于 rolling/REF 等算子。
+    :param scope: valid_only=仅 is_valid；all_in_basic=factor_basic 全量 ∩ factor_docs（日更路径可覆盖未过阈因子）。
+    """
+    cfg = Config(config_file=config_file)
+    db_manager = get_db_manager(config_file=config_file)
+
+    t_ts = pd.Timestamp(trade_date)
+    start_ts = t_ts - pd.Timedelta(days=int(lookback_days))
+    start_date = start_ts.strftime("%Y-%m-%d")
+    end_date = t_ts.strftime("%Y-%m-%d")
+
+    logger.info(
+        "日更因子值启动 trade_date=%s, 行情窗口 [%s, %s], lookback_days=%s",
+        trade_date,
+        start_date,
+        end_date,
+        lookback_days,
+    )
+
+    meta_list = load_all_factors()
+    meta_by_id: dict[str, FactorDefinition] = {f.factor_id: f for f in meta_list}
+    if not meta_by_id:
+        logger.error("factor_docs 未解析到任何因子，退出")
+        return
+
+    session = db_manager.get_session()
+    try:
+        if scope == "all_in_basic":
+            db_ids = _load_all_factor_ids_from_basic(session)
+            logger.info("scope=all_in_basic：从 factor_basic 加载 %d 个 factor_id", len(db_ids))
+        else:
+            db_ids = _load_valid_factor_ids_from_db(session)
+            logger.info("scope=valid_only：从 factor_basic 加载 is_valid=TRUE 共 %d 个", len(db_ids))
+    finally:
+        session.close()
+
+    if not db_ids:
+        logger.warning("factor_basic 无可用 factor_id，退出（请检查 scope 与库数据）")
+        return
+
+    id_set: Set[str] = set(db_ids)
+    if factor_ids_filter:
+        wanted = set(factor_ids_filter)
+        id_set &= wanted
+        missing_docs = wanted - set(meta_by_id.keys())
+        if missing_docs:
+            logger.warning("以下因子在 factor_docs 中不存在，将跳过: %s", sorted(missing_docs))
+
+    factors_to_run: List[FactorDefinition] = [
+        meta_by_id[fid] for fid in sorted(id_set) if fid in meta_by_id
+    ]
+
+    if not factors_to_run:
+        logger.error("无待计算因子（检查 is_valid 与 factor_docs 是否交集为空）")
+        return
+
+    logger.info(
+        "本次将计算 %d 个因子（factor_basic 选中集合 ∩ factor_docs）；"
+        "若红框因子未出现，多为 is_valid=FALSE 且此前使用了 valid_only",
+        len(factors_to_run),
+    )
+
+    price_df = _load_stock_daily(
+        config_file=config_file,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    if price_df.empty:
+        logger.error("stock_daily 在窗口内无数据，无法计算")
+        return
+
+    avail_dates = price_df.index.get_level_values("trade_date").unique()
+    if t_ts not in set(avail_dates):
+        logger.error(
+            "trade_date=%s 不在行情数据中；可用日期示例（末5个）: %s",
+            trade_date,
+            sorted(avail_dates)[-5:],
+        )
+        return
+
+    root = _project_root()
+    out_base = root / "factor_values" / "daily"
+
+    session = db_manager.get_session()
+    ok_count = 0
+    fail_count = 0
+
+    try:
+        for factor in factors_to_run:
+            logger.info("日更计算因子 %s - %s", factor.factor_id, factor.factor_name)
+            try:
+                raw_series = compute_factor_values(factor.formula, price_df)
+                processed = winsorize_and_standardize(raw_series)
+                df_out = processed.to_frame("factor_value").reset_index()
+                df_out["trade_date"] = pd.to_datetime(df_out["trade_date"])
+                df_day = df_out[df_out["trade_date"] == t_ts].copy()
+
+                if df_day.empty:
+                    n_t = int((df_out["trade_date"] == t_ts).sum())
+                    nn = int(df_out.loc[df_out["trade_date"] == t_ts, "factor_value"].notna().sum())
+                    logger.warning(
+                        "因子 %s 在 %s 截面无输出：trade_date 匹配行数=%d，其中 factor_value 非空=%d（"
+                        "若为 0 多为历史窗口不足，可增大 lookback_days）",
+                        factor.factor_id,
+                        trade_date,
+                        n_t,
+                        nn,
+                    )
+                    fail_count += 1
+                    continue
+
+                df_day = df_day[["trade_date", "stock_code", "factor_value"]]
+                df_day["trade_date"] = df_day["trade_date"].dt.strftime("%Y-%m-%d")
+
+                subdir = out_base / factor.factor_id
+                subdir.mkdir(parents=True, exist_ok=True)
+                csv_name = f"{trade_date}.csv"
+                full_path = subdir / csv_name
+                df_day.to_csv(full_path, index=False)
+
+                rel = full_path.resolve().relative_to(root.resolve()).as_posix()
+                _upsert_factor_values_path_daily(session, factor.factor_id, rel)
+                logger.info("已写出 %s 并更新 factor_values_path_daily=%s", full_path, rel)
+                ok_count += 1
+
+            except Exception as e:
+                logger.error("因子 %s 日更失败: %s", factor.factor_id, e)
+                fail_count += 1
+
+        session.commit()
+        logger.info(
+            "日更完成：成功 %d，失败/跳过 %d，已提交 DB",
+            ok_count,
+            fail_count,
+        )
+    except Exception as e:
+        session.rollback()
+        logger.error("日更批量执行失败，已回滚: %s", e)
+        raise
+    finally:
+        session.close()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="因子工厂：日更 factor_values（单日 CSV + factor_values_path_daily）")
+    parser.add_argument(
+        "--config",
+        default="src/daily_factor_values/config_dev.ini",
+        help="配置文件路径（需含 [database]，与 factor_engine 一致）",
+    )
+    parser.add_argument(
+        "--trade-date",
+        required=True,
+        help="因子值所属交易日 T，格式 YYYY-MM-DD（写入 CSV 的 trade_date）",
+    )
+    parser.add_argument(
+        "--lookback-days",
+        type=int,
+        default=None,
+        help="向前拉行情的自然日天数；默认从配置 [daily] lookback_days 读取，缺省为 380",
+    )
+    parser.add_argument(
+        "--factor-ids",
+        default="",
+        help="可选：逗号分隔，仅跑这些因子（用于联调）；为空则按 --scope 决定因子集合",
+    )
+    parser.add_argument(
+        "--scope",
+        choices=("valid_only", "all_in_basic"),
+        default=None,
+        help="valid_only=仅 is_valid（默认）；all_in_basic=factor_basic 全量∩docs，给未过阈但仍有回测 CSV 的因子写日更",
+    )
+
+    args = parser.parse_args()
+
+    cfg = Config(config_file=args.config)
+    lookback = args.lookback_days
+    if lookback is None:
+        lookback = cfg.getint("daily", "lookback_days", fallback=380)
+
+    scope = args.scope or cfg.get("daily", "scope", fallback="valid_only").strip()
+    if scope not in ("valid_only", "all_in_basic"):
+        scope = "valid_only"
+
+    filt = _parse_factor_ids_csv(args.factor_ids) if args.factor_ids.strip() else None
+
+    run_daily_factor_values(
+        config_file=args.config,
+        trade_date=args.trade_date.strip(),
+        lookback_days=lookback,
+        factor_ids_filter=filt,
+        scope=scope,
+    )
+
+
+if __name__ == "__main__":
+    main()
