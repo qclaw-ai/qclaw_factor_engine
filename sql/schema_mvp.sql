@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS factor_basic (
     factor_id         varchar(128) PRIMARY KEY,      -- 因子ID，来自文档 & md
     factor_name       varchar(256) NOT NULL,         -- 因子名称
     factor_type       varchar(64),                   -- 因子类型（动量/量价等）
-    test_universe     varchar(64),                   -- 测试股票池（全A/沪深300等）
+    test_universe     varchar(64),                   -- 文档/默认实证域提示；多领域以 factor_backtest + factor_universe_status 为准
     trading_cycle     varchar(32),                   -- 调仓/交易周期（如 日线）
     source_url        varchar(512),                  -- 来源链接
     create_time       timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 入库时间
@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS factor_basic (
 CREATE TABLE IF NOT EXISTS factor_backtest (
     id                 serial PRIMARY KEY,           -- 主键
     factor_id          varchar(128) NOT NULL,        -- 因子ID，外键到 factor_basic
+    test_universe      varchar(64)  NOT NULL DEFAULT 'ALL_A', -- 大回测实证域（ALL_A / HS300 / ZZ500 …）
     backtest_period    varchar(128) NOT NULL,        -- 回测区间（如 "2021-01-01 至 2025-12-31"）
     horizon            varchar(32)  NOT NULL,        -- 收益 horizon（如 "5d"）
     ic_value           numeric,                      -- IC
@@ -69,6 +70,7 @@ CREATE TABLE IF NOT EXISTS factor_backtest (
     turnover           numeric,                      -- 换手率
     pass_standard      boolean,                      -- 是否通过当前阈值标准
     backtest_time      timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 回测时间
+    result_json_rel_path varchar(1024),            -- 该次回测 JSON 相对路径（可选）
     comment            text                          -- 可选：用于标记 initial/recheck/reactivate 等信息
 );
 
@@ -80,6 +82,28 @@ ALTER TABLE factor_backtest
 
 CREATE INDEX IF NOT EXISTS idx_factor_backtest_factor_id
     ON factor_backtest (factor_id);
+
+CREATE INDEX IF NOT EXISTS idx_factor_backtest_factor_universe_time
+    ON factor_backtest (factor_id, test_universe, backtest_time DESC);
+
+
+-- =========================================
+-- 3b. 因子-领域有效状态：factor_universe_status
+-- =========================================
+
+CREATE TABLE IF NOT EXISTS factor_universe_status (
+    factor_id     varchar(128) NOT NULL,
+    test_universe varchar(64)  NOT NULL,
+    is_valid      boolean      NOT NULL DEFAULT FALSE,
+    updated_at    timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (factor_id, test_universe)
+);
+
+ALTER TABLE factor_universe_status
+    ADD CONSTRAINT fk_factor_universe_status_factor
+    FOREIGN KEY (factor_id) REFERENCES factor_basic (factor_id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE;
 
 
 -- =========================================
@@ -98,6 +122,61 @@ ALTER TABLE factor_files
     FOREIGN KEY (factor_id) REFERENCES factor_basic (factor_id)
     ON UPDATE CASCADE
     ON DELETE CASCADE;
+
+
+-- =========================================
+-- 4b. 因子值路径表：factor_value_files（真分域）
+-- =========================================
+
+CREATE TABLE IF NOT EXISTS factor_value_files (
+    id            serial PRIMARY KEY,
+    factor_id     varchar(128) NOT NULL,      -- 因子ID，外键到 factor_basic
+    universe      varchar(64)  NOT NULL,      -- 领域（ALL_A/HS300/ZZ500/...）
+    artifact_type varchar(32)  NOT NULL,      -- 产物类型：batch_csv / daily_csv
+    rel_path      varchar(1024) NOT NULL,     -- 相对仓库根路径（POSIX）
+    date_start    date,                        -- batch_csv 起始日
+    date_end      date,                        -- batch_csv 结束日
+    trade_date    date,                        -- daily_csv 交易日
+    created_at    timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    comment       text,
+    CONSTRAINT ck_factor_value_files_artifact_type
+        CHECK (artifact_type IN ('batch_csv', 'daily_csv')),
+    CONSTRAINT ck_factor_value_files_batch_fields
+        CHECK (
+            artifact_type <> 'batch_csv'
+            OR (
+                date_start IS NOT NULL
+                AND date_end IS NOT NULL
+                AND trade_date IS NULL
+            )
+        ),
+    CONSTRAINT ck_factor_value_files_daily_fields
+        CHECK (
+            artifact_type <> 'daily_csv'
+            OR (
+                trade_date IS NOT NULL
+                AND date_start IS NULL
+                AND date_end IS NULL
+            )
+        )
+);
+
+ALTER TABLE factor_value_files
+    ADD CONSTRAINT fk_factor_value_files_factor
+    FOREIGN KEY (factor_id) REFERENCES factor_basic (factor_id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_factor_value_files_batch
+    ON factor_value_files (factor_id, universe, artifact_type, date_start, date_end)
+    WHERE artifact_type = 'batch_csv';
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_factor_value_files_daily
+    ON factor_value_files (factor_id, universe, artifact_type, trade_date)
+    WHERE artifact_type = 'daily_csv';
+
+CREATE INDEX IF NOT EXISTS idx_factor_value_files_factor_universe_type
+    ON factor_value_files (factor_id, universe, artifact_type, created_at DESC);
 
 
 -- =========================================

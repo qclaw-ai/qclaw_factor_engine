@@ -7,8 +7,11 @@
 ### 1. 表作用边界
 
 - `factor_basic`：因子基础元信息（名称、类型、股票池、周期、来源、有效状态等），**所有因子的中心表**。
-- `factor_files`：因子对应的文件路径信息（md / 回测 JSON / 日志），**只负责“文件在哪”**。
-- `factor_backtest`：因子每一次回测的结果记录（IC/IC_IR/夏普/回撤/换手率等）。
+- `factor_files`：因子对应的文件路径信息（md / 回测 JSON / 日志），**只负责“文件在哪”**。  
+- **（规划）`factor_value_files`**：按 `(factor_id, universe)` 存 **真分域因子值 CSV** 等路径；详见 `docs/因子侧真分域因子值_设计与落地步骤.md`。落地前多域值路径勿与 `factor_files` 单行混用语义。
+- 真分域路径约定（已定）：`factor_values/by_universe/{UNIVERSE}/{factor_id}_{UNIVERSE}_{start}_{end}.csv`；**ALL 也在 `by_universe/ALL/`，不再使用旧扁平 `factor_values/` 作为主路径**。
+- `factor_backtest`：因子每一次回测的结果记录（IC/IC_IR/夏普/回撤/换手率等）；**多领域**时同一 `factor_id` 多行，以 `test_universe` 区分，并可有 `result_json_rel_path`。  
+- `factor_universe_status`：因子在 **各实证域** 上是否过阈（`is_valid`）；**权威按域状态**。`factor_basic.is_valid` 为其派生：**任一侧为 TRUE 则为 TRUE**（供日更等兼容查询）。  
 - `factor_threshold_config`：各场景的阈值配置（入库、复检、复活等）。
 - `factor_candidate`：尚未进入正式因子库的候选因子队列（给非程序员/前端表单用）。
 - `factor_definition`：**当前阶段不启用，仅作为后续“公式入库 + 版本管理”的预留设计**。

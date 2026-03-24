@@ -20,6 +20,14 @@ from factor_docs.factor_docs_parser import load_all_factors, FactorDefinition
 logger = setup_logger("selection_and_store_runner", "logs/selection_and_store_runner.log")
 
 
+def _safe_universe_file_tag(test_universe: str) -> str:
+    """与 backtest_io 一致，用于拼接回测 JSON 文件名。"""
+    s = (test_universe or "ALL").strip()
+    for ch in '\\/:*?"<>|':
+        s = s.replace(ch, "_")
+    return s or "ALL"
+
+
 def _load_thresholds(session, scene: str) -> Dict[str, Any]:
     """加载当前场景下激活的阈值配置"""
     sql = text(
@@ -38,13 +46,14 @@ def _load_thresholds(session, scene: str) -> Dict[str, Any]:
     return dict(row)
 
 
-def _load_latest_backtests(session) -> Dict[str, Dict[str, Any]]:
-    """加载每个因子最新一条 factor_backtest 记录"""
+def _load_latest_backtests_per_universe(session) -> list[Dict[str, Any]]:
+    """每个 (factor_id, test_universe) 取最新一条 factor_backtest（多领域并存）。"""
     sql = text(
         """
-        SELECT DISTINCT ON (factor_id)
+        SELECT DISTINCT ON (factor_id, test_universe)
             id,
             factor_id,
+            test_universe,
             backtest_period,
             horizon,
             ic_value,
@@ -53,17 +62,66 @@ def _load_latest_backtests(session) -> Dict[str, Dict[str, Any]]:
             max_drawdown,
             turnover,
             pass_standard,
-            backtest_time
+            backtest_time,
+            result_json_rel_path
         FROM factor_backtest
-        ORDER BY factor_id, backtest_time DESC, id DESC
+        ORDER BY factor_id, test_universe, backtest_time DESC, id DESC
         """
     )
     rows = session.execute(sql).mappings().all()
-    latest: Dict[str, Dict[str, Any]] = {}
-    for r in rows:
-        latest[r["factor_id"]] = dict(r)
-    logger.info(f"共加载到 {len(latest)} 个因子的最新回测记录")
-    return latest
+    out = [dict(r) for r in rows]
+    logger.info("共加载到 %d 条 (因子, 实证域) 维度的最新回测记录", len(out))
+    return out
+
+
+def _upsert_factor_universe_status(
+    session,
+    factor_id: str,
+    test_universe: str,
+    is_valid: bool,
+) -> None:
+    """按 (因子, 领域) 写入有效位；factor_basic.is_valid 由此派生。"""
+    sql = text(
+        """
+        INSERT INTO factor_universe_status (
+            factor_id,
+            test_universe,
+            is_valid,
+            updated_at
+        ) VALUES (
+            :factor_id,
+            :test_universe,
+            :is_valid,
+            CURRENT_TIMESTAMP
+        )
+        ON CONFLICT (factor_id, test_universe) DO UPDATE SET
+            is_valid = EXCLUDED.is_valid,
+            updated_at = EXCLUDED.updated_at
+        """
+    )
+    session.execute(
+        sql,
+        {
+            "factor_id": factor_id,
+            "test_universe": test_universe,
+            "is_valid": is_valid,
+        },
+    )
+
+
+def _sync_factor_basic_is_valid(session, factor_id: str) -> None:
+    """任一侧为 TRUE 则 factor_basic.is_valid = TRUE（兼容日更等只读 is_valid 的逻辑）。"""
+    sql = text(
+        """
+        UPDATE factor_basic
+        SET is_valid = EXISTS (
+            SELECT 1 FROM factor_universe_status fus
+            WHERE fus.factor_id = :factor_id AND fus.is_valid = TRUE
+        )
+        WHERE factor_id = :factor_id
+        """
+    )
+    session.execute(sql, {"factor_id": factor_id})
 
 
 def _judge_pass(res: Dict[str, Any], th: Dict[str, Any]) -> bool:
@@ -156,7 +214,10 @@ def run_selection_and_store(config_file: str = "src/selection_and_store/config.i
 
     cfg = Config(config_file=config_file)
     scene = cfg.get("selection", "scene", fallback="A_stock_daily_single_factor")
-    
+    primary_universe = (
+        cfg.get("selection", "primary_universe_for_file_pointer", fallback="ALL") or "ALL"
+    ).strip()
+
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     
     backtest_results_dir = cfg.get(
@@ -175,16 +236,28 @@ def run_selection_and_store(config_file: str = "src/selection_and_store/config.i
 
     try:
         thresholds = _load_thresholds(session, scene)
-        latest_bt = _load_latest_backtests(session)
+        latest_rows = _load_latest_backtests_per_universe(session)
 
-        for factor_id, rec in latest_bt.items():
+        # factor_id -> 用于 factor_files.backtest_json_path 的相对路径（优先主实证域）
+        json_pointer_by_factor: Dict[str, str] = {}
+        touched_factors: set[str] = set()
+
+        for rec in latest_rows:
+            factor_id = rec["factor_id"]
+            test_u = rec.get("test_universe") or "ALL"
+            touched_factors.add(factor_id)
             passed = _judge_pass(rec, thresholds)
 
             logger.info(
-                f"因子 {factor_id} 判定结果: {'PASS' if passed else 'FAIL'}, "
-                f"IC={rec.get('ic_value')}, IC_IR={rec.get('ic_ir')}, "
-                f"Sharpe={rec.get('sharpe_ratio')}, MaxDD={rec.get('max_drawdown')}, "
-                f"Turnover={rec.get('turnover')}"
+                "因子 %s 领域 %s 判定: %s, IC=%s, IC_IR=%s, Sharpe=%s, MaxDD=%s, Turnover=%s",
+                factor_id,
+                test_u,
+                "PASS" if passed else "FAIL",
+                rec.get("ic_value"),
+                rec.get("ic_ir"),
+                rec.get("sharpe_ratio"),
+                rec.get("max_drawdown"),
+                rec.get("turnover"),
             )
 
             # 1) 更新 factor_backtest.pass_standard
@@ -203,36 +276,47 @@ def run_selection_and_store(config_file: str = "src/selection_and_store/config.i
                 },
             )
 
-            # 2) 更新 factor_basic.is_valid
-            update_basic_sql = text(
-                """
-                UPDATE factor_basic
-                SET is_valid = :is_valid
-                WHERE factor_id = :factor_id
-                """
-            )
-            session.execute(
-                update_basic_sql,
-                {
-                    "is_valid": passed,
-                    "factor_id": factor_id,
-                },
+            # 2) 按 (因子, 领域) 更新有效位
+            _upsert_factor_universe_status(
+                session,
+                factor_id=factor_id,
+                test_universe=test_u,
+                is_valid=passed,
             )
 
-            # 3) 更新 factor_files
+            if test_u == primary_universe:
+                rel = rec.get("result_json_rel_path")
+                if rel and os.path.isfile(os.path.join(project_root, rel.replace("/", os.sep))):
+                    json_pointer_by_factor[factor_id] = rel.replace("\\", "/")
+
+        # 3) 派生 factor_basic.is_valid；4) factor_files（每个因子一次）
+        for factor_id in touched_factors:
+            _sync_factor_basic_is_valid(session, factor_id)
+
             fd = factor_meta.get(factor_id)
             if fd:
-                # 存相对路径，避免把本机绝对路径写进 DB
-                project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
                 doc_path = os.path.relpath(fd.doc_path, start=project_root).replace("\\", "/")
             else:
                 doc_path = None
-            # 生成相对仓库根的 POSIX 路径
-            json_abs_path = os.path.join(project_root, backtest_results_dir, f"{factor_id}_backtest.json")
-            json_rel_path = os.path.relpath(json_abs_path, start=project_root).replace("\\", "/")
-            if not os.path.exists(json_abs_path):
-                logger.warning(f"未找到回测 JSON 文件: {json_abs_path}")
-                json_rel_path = None
+
+            json_rel_path = json_pointer_by_factor.get(factor_id)
+            if not json_rel_path:
+                u_tag = _safe_universe_file_tag(primary_universe)
+                cand = os.path.join(
+                    project_root,
+                    backtest_results_dir,
+                    "by_universe",
+                    u_tag,
+                    f"{factor_id}_{u_tag}_backtest.json",
+                )
+                if os.path.isfile(cand):
+                    json_rel_path = os.path.relpath(cand, start=project_root).replace("\\", "/")
+            if not json_rel_path:
+                legacy = os.path.join(project_root, backtest_results_dir, f"{factor_id}_backtest.json")
+                if os.path.isfile(legacy):
+                    json_rel_path = os.path.relpath(legacy, start=project_root).replace("\\", "/")
+                else:
+                    logger.warning("未找到因子 %s 的回测 JSON（已试主域与 LEGACY 文件名）", factor_id)
 
             _upsert_factor_files(
                 session=session,

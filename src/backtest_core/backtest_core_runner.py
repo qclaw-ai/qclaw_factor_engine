@@ -4,7 +4,7 @@
 import os
 import sys
 from dataclasses import dataclass
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 import numpy as np
 import pandas as pd
 from sqlalchemy import text
@@ -29,6 +29,8 @@ class BacktestResult:
     sharpe_ratio: float
     max_drawdown: float
     turnover: float
+    # 大回测实证域（与因子值是否全市场计算无关；写入 factor_backtest.test_universe）
+    test_universe: str = "ALL"
 
 
 def _load_factor_csv(path: str) -> pd.DataFrame:
@@ -193,12 +195,45 @@ def _compute_sharpe_maxdd(ret_series: pd.Series, horizon: int) -> Tuple[float, f
     return sharpe, max_dd
 
 
+def _extract_factor_id_from_csv_name(file_name: str, test_universe: str) -> Optional[str]:
+    """
+    从 CSV 文件名提取 factor_id（全域统一命名）：
+    - <factor_id>_<UNIVERSE>_<start>_<end>.csv
+    """
+    name_no_ext = os.path.splitext(file_name)[0]
+    parts = name_no_ext.split("_")
+    if len(parts) < 4:
+        return None
+
+    u = (test_universe or "ALL").strip().upper()
+    # 分域命名：最后三段是 <UNIVERSE>_<start>_<end>
+    if len(parts) >= 4 and parts[-3].upper() == u:
+        return "_".join(parts[:-3])
+    return None
+
+
+def _discover_csv_files(factor_output_dir: str, test_universe: str) -> Tuple[List[str], str]:
+    """
+    发现回测要使用的 CSV 文件（全域统一 by_universe，无兼容回退）。
+    返回：(文件名列表, 实际读取目录)
+    """
+    u = (test_universe or "ALL").strip().upper()
+    by_u_dir = os.path.join(factor_output_dir, "by_universe", u)
+
+    if not os.path.isdir(by_u_dir):
+        return [], by_u_dir
+
+    files = [f for f in os.listdir(by_u_dir) if f.lower().endswith(".csv")]
+    return files, by_u_dir
+
+
 def run_backtest_for_one(
     config_file: str,
     factor_id: str,
     factor_csv_path: str,
     horizon: int,
     n_quantiles: int,
+    test_universe: str = "ALL",
 ) -> BacktestResult | None:
     logger.info(
         f"开始回测因子: {factor_id}, horizon={horizon}, "
@@ -241,6 +276,7 @@ def run_backtest_for_one(
         sharpe_ratio=sharpe_ratio,
         max_drawdown=max_drawdown,
         turnover=turnover,
+        test_universe=test_universe,
     )
 
     return result
@@ -255,6 +291,7 @@ def run_backtest(config_file: str = "backtest_core/config.ini") -> List[Backtest
     n_quantiles = cfg.getint("backtest", "n_quantiles", fallback=10)
     factor_output_dir = cfg.get("backtest", "factor_output_dir", fallback="factor_values").strip()
     factor_ids_raw = cfg.get("backtest", "factor_ids", fallback="").strip()
+    test_universe = (cfg.get("backtest", "test_universe", fallback="ALL") or "ALL").strip()
 
     include_factor_ids: List[str] = [
         fid.strip() for fid in factor_ids_raw.split(",") if fid.strip()
@@ -264,30 +301,32 @@ def run_backtest(config_file: str = "backtest_core/config.ini") -> List[Backtest
         logger.error(f"因子输出目录不存在: {factor_output_dir}")
         return []
 
-    # 扫描目录下所有 csv 文件
-    csv_files = [
-        f for f in os.listdir(factor_output_dir)
-        if f.lower().endswith(".csv")
-    ]
+    # 扫描 CSV：全域统一 by_universe（含 ALL）
+    csv_files, actual_dir = _discover_csv_files(
+        factor_output_dir=factor_output_dir,
+        test_universe=test_universe,
+    )
     if not csv_files:
-        logger.error(f"目录 {factor_output_dir} 下未找到任何 CSV 文件")
+        logger.error(
+            f"目录 {actual_dir} 下未找到任何 CSV 文件（不再回退旧扁平 factor_values）"
+        )
         return []
+    logger.info(f"本次回测读取目录: {actual_dir}")
 
     results: List[BacktestResult] = []
 
     for file_name in csv_files:
-        # 约定：文件名形如 <factor_id>_<start_date>_<end_date>.csv
-        # 因子ID本身可能包含下划线，因此取“去掉最后两个 '_' 段”的部分
-        name_no_ext = os.path.splitext(file_name)[0]
-        parts = name_no_ext.split("_")
-        if len(parts) < 3:
+        factor_id = _extract_factor_id_from_csv_name(
+            file_name=file_name,
+            test_universe=test_universe,
+        )
+        if not factor_id:
             logger.warning(f"文件名不符合约定，跳过: {file_name}")
             continue
-        factor_id = "_".join(parts[:-2])
         if include_factor_ids and factor_id not in include_factor_ids:
             continue
 
-        csv_path = os.path.join(factor_output_dir, file_name)
+        csv_path = os.path.join(actual_dir, file_name)
         try:
             res = run_backtest_for_one(
                 config_file=config_file,
@@ -295,6 +334,7 @@ def run_backtest(config_file: str = "backtest_core/config.ini") -> List[Backtest
                 factor_csv_path=csv_path,
                 horizon=horizon,
                 n_quantiles=n_quantiles,
+                test_universe=test_universe,
             )
             if res is not None:
                 results.append(res)

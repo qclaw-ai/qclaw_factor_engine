@@ -38,6 +38,12 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from common.config import Config
 from common.db import get_db_manager
+from common.universe_service import (
+    internal_stock_code_to_jq_code as _common_internal_stock_code_to_jq_code,
+    normalize_jq_code_to_stock_code as _common_normalize_jq_code_to_stock_code,
+    normalize_stock_code_from_source_symbol as _common_normalize_stock_code_from_source_symbol,
+    resolve_universe_for_jq as _common_resolve_universe_for_jq,
+)
 from common.utils import setup_logger
 
 logger = setup_logger("daily_stock_and_calendar_sync", "logs/daily_stock_and_calendar_sync.log")
@@ -50,21 +56,8 @@ def _normalize_jq_code_to_stock_code(jq_code: str) -> str:
     - 股票：000001.XSHE / 600000.XSHG -> 000001.SZ / 600000.SH
     - 期货等：IF2403.CCFX / rb2405.XSGE 等去掉交易所后缀
     """
-    if jq_code.endswith(".XSHE"):
-        return jq_code.replace(".XSHE", ".SZ")
-    if jq_code.endswith(".XSHG"):
-        return jq_code.replace(".XSHG", ".SH")
-    if jq_code.endswith(".CCFX"):
-        return jq_code.replace(".CCFX", "")
-    if jq_code.endswith(".XDCE"):
-        return jq_code.replace(".XDCE", "")
-    if jq_code.endswith(".XSGE"):
-        return jq_code.replace(".XSGE", "")
-    if jq_code.endswith(".XZCE"):
-        return jq_code.replace(".XZCE", "")
-    if jq_code.endswith(".XINE"):
-        return jq_code.replace(".XINE", "")
-    return jq_code
+    # 统一委托给 common.universe_service，避免多处实现分叉。
+    return _common_normalize_jq_code_to_stock_code(jq_code)
 
 
 def _normalize_stock_code_from_source_symbol(symbol: str) -> str:
@@ -73,25 +66,16 @@ def _normalize_stock_code_from_source_symbol(symbol: str) -> str:
 
     这里做同样的归一化：如果源表已经写成 .SZ/.SH，则会原样返回。
     """
-    if symbol is None:
-        return ""
-    s = str(symbol).strip()
-    if not s:
-        return ""
-    # 覆盖 JQsync.py 的反向/同向映射逻辑
-    return _normalize_jq_code_to_stock_code(s)
+    # 统一委托给 common.universe_service，避免多处实现分叉。
+    return _common_normalize_stock_code_from_source_symbol(symbol)
 
 
 def _internal_stock_code_to_jq_code(internal_stock_code: str) -> str:
     """
     内部 stock_code（000001.SZ / 000001.SH）→ 聚宽 get_price 所需 jq_code。
     """
-    s = internal_stock_code.strip()
-    if s.endswith(".SZ"):
-        return s.replace(".SZ", ".XSHE")
-    if s.endswith(".SH"):
-        return s.replace(".SH", ".XSHG")
-    return s
+    # 统一委托给 common.universe_service，避免多处实现分叉。
+    return _common_internal_stock_code_to_jq_code(internal_stock_code)
 
 
 def _format_to_yyyymmdd(v) -> str:
@@ -197,42 +181,12 @@ def _resolve_universe_for_jq(cfg: Config, end_date: str) -> Tuple[List[str], Lis
     - jq_codes（用于 get_price）
     - jq_code_to_internal 映射
     """
-    universe = cfg.get("data_ingest", "universe", fallback="CUSTOM").upper()
-    internal_stock_codes: List[str] = []
-    jq_codes: List[str] = []
-    jq_code_to_internal: Dict[str, str] = {}
-
-    if universe == "CUSTOM":
-        raw_codes = cfg.get("data_ingest", "stock_codes", fallback="").strip()
-        if not raw_codes:
-            return [], [], {}
-        for code in [x.strip() for x in raw_codes.split(",") if x.strip()]:
-            internal = _normalize_stock_code_from_source_symbol(code)
-            jq_code = _internal_stock_code_to_jq_code(code)
-            internal_stock_codes.append(internal)
-            jq_codes.append(jq_code)
-            jq_code_to_internal[jq_code] = internal
-        return internal_stock_codes, jq_codes, jq_code_to_internal
-
-    if universe == "HS300":
-        jq_codes = jqdatasdk.get_index_stocks("000300.XSHG", date=end_date)
-        for jq_code in jq_codes:
-            internal = _normalize_jq_code_to_stock_code(jq_code)
-            internal_stock_codes.append(internal)
-            jq_code_to_internal[jq_code] = internal
-        return internal_stock_codes, jq_codes, jq_code_to_internal
-
-    if universe == "ALL":
-        # 生产不建议跑 ALL（数据量巨大）；这里保留接口以便你扩展
-        df = jqdatasdk.get_all_securities(types=["stock"], date=end_date)
-        jq_codes = list(df.index.to_list())
-        for jq_code in jq_codes:
-            internal = _normalize_jq_code_to_stock_code(jq_code)
-            internal_stock_codes.append(internal)
-            jq_code_to_internal[jq_code] = internal
-        return internal_stock_codes, jq_codes, jq_code_to_internal
-
-    raise ValueError(f"不支持的 universe 类型: {universe}")
+    internal_stock_codes, jq_codes, jq_code_to_internal, _ = _common_resolve_universe_for_jq(
+        cfg=cfg,
+        end_date=end_date,
+        section="data_ingest",
+    )
+    return internal_stock_codes, jq_codes, jq_code_to_internal
 
 
 def _upsert_stock_daily(session, records: List[Dict[str, object]]) -> int:

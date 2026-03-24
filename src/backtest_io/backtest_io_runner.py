@@ -21,6 +21,14 @@ from factor_docs.factor_docs_parser import load_all_factors, FactorDefinition
 logger = setup_logger("backtest_io_runner", "logs/backtest_io_runner.log")
 
 
+def _safe_universe_file_tag(test_universe: str) -> str:
+    """文件名安全片段：去掉路径分隔符等。"""
+    s = (test_universe or "ALL").strip()
+    for ch in '\\/:*?"<>|':
+        s = s.replace(ch, "_")
+    return s or "ALL"
+
+
 def _load_factor_meta() -> Dict[str, FactorDefinition]:
     """从 factor_docs 加载因子元数据，便于写入 factor_basic / JSON"""
     factors = load_all_factors()
@@ -75,12 +83,13 @@ def _ensure_factor_basic(
     )
 
 
-def _insert_factor_backtest(session, res: BacktestResult) -> None:
-    """将回测结果插入 factor_backtest 表"""
+def _insert_factor_backtest(session, res: BacktestResult, result_json_rel_path: str | None) -> None:
+    """将回测结果插入 factor_backtest 表（含实证域与 JSON 相对路径）"""
     insert_sql = text(
         """
         INSERT INTO factor_backtest (
             factor_id,
+            test_universe,
             backtest_period,
             horizon,
             ic_value,
@@ -89,9 +98,11 @@ def _insert_factor_backtest(session, res: BacktestResult) -> None:
             max_drawdown,
             turnover,
             pass_standard,
+            result_json_rel_path,
             comment
         ) VALUES (
             :factor_id,
+            :test_universe,
             :backtest_period,
             :horizon,
             :ic_value,
@@ -100,6 +111,7 @@ def _insert_factor_backtest(session, res: BacktestResult) -> None:
             :max_drawdown,
             :turnover,
             :pass_standard,
+            :result_json_rel_path,
             :comment
         )
         """
@@ -109,6 +121,7 @@ def _insert_factor_backtest(session, res: BacktestResult) -> None:
         insert_sql,
         {
             "factor_id": res.factor_id,
+            "test_universe": res.test_universe,
             "backtest_period": res.backtest_period,
             "horizon": res.horizon,
             "ic_value": res.ic_value,
@@ -117,23 +130,35 @@ def _insert_factor_backtest(session, res: BacktestResult) -> None:
             "max_drawdown": res.max_drawdown,
             "turnover": res.turnover,
             "pass_standard": None,  # 是否通过标准由 selection_and_store 再更新
+            "result_json_rel_path": result_json_rel_path,
             "comment": None,
         },
     )
 
 
 
-def _upsert_factor_values_path(session, factor_id: str, factor_output_dir: str) -> None:
+def _upsert_factor_values_path(
+    session,
+    factor_id: str,
+    factor_output_dir: str,
+    universe: str,
+) -> None:
     """
-    在 factor_output_dir 中查找以 <factor_id>_ 开头的 CSV 文件，
+    在 factor_output_dir/by_universe/{UNIVERSE} 中查找以 <factor_id>_<UNIVERSE>_ 开头的 CSV 文件，
     用找到的真实文件名写入 factor_files.factor_values_path。
     """
-    root_dir = Path(factor_output_dir)
-    pattern = f"{factor_id}_*.csv"
+    u_tag = _safe_universe_file_tag(universe).upper()
+    root_dir = Path(factor_output_dir) / "by_universe" / u_tag
+    pattern = f"{factor_id}_{u_tag}_*.csv"
     matches = list(root_dir.glob(pattern))
     if not matches:
         # 找不到就直接返回，不影响主流程
-        logger.warning("未在 %s 下找到因子 %s 的 CSV 文件", factor_output_dir, factor_id)
+        logger.warning(
+            "未在 %s 下找到因子 %s（universe=%s）的 CSV 文件",
+            root_dir,
+            factor_id,
+            u_tag,
+        )
         return
 
     # 如果有多个，按文件名排序取最新一个
@@ -164,10 +189,13 @@ def _write_backtest_json(
     res: BacktestResult,
     meta: Dict[str, FactorDefinition],
 ) -> str:
-    """将单个因子回测结果写入 JSON，返回路径"""
-    os.makedirs(base_dir, exist_ok=True)
-    file_name = f"{res.factor_id}_backtest.json"
-    path = os.path.join(base_dir, file_name)
+    """将单个因子回测结果写入 JSON，返回绝对路径（按实证域分目录，避免混放）。"""
+    u_tag = _safe_universe_file_tag(res.test_universe)
+    # 与 factor_values 保持一致：按域分目录（包含 ALL）
+    universe_dir = os.path.join(base_dir, "by_universe", u_tag)
+    os.makedirs(universe_dir, exist_ok=True)
+    file_name = f"{res.factor_id}_{u_tag}_backtest.json"
+    path = os.path.join(universe_dir, file_name)
 
     fd = meta.get(res.factor_id)
 
@@ -175,7 +203,8 @@ def _write_backtest_json(
         "factor_id": res.factor_id,
         "factor_name": fd.factor_name if fd else res.factor_id,
         "factor_type": fd.factor_type if fd else None,
-        "test_universe": fd.test_universe if fd else None,
+        # 实证域以本次大回测为准（与 md 中适用股票池可并存）
+        "test_universe": res.test_universe,
         "trading_cycle": fd.trading_cycle if fd else None,
         "source_url": fd.source_url if fd else None,
         "backtest_period": res.backtest_period,
@@ -241,17 +270,24 @@ def run_backtest_io(
             )
             logger.info(f"回测结果 JSON 写入: {json_path}")
 
+            project_root = Path(__file__).resolve().parents[2]
+            try:
+                json_rel = Path(json_path).resolve().relative_to(project_root).as_posix()
+            except ValueError:
+                json_rel = Path(json_path).as_posix()
+
             # 2) 确保 factor_basic 中有记录
             _ensure_factor_basic(session, factor_meta, res.factor_id)
 
             # 3) 插入 factor_backtest
-            _insert_factor_backtest(session, res)
+            _insert_factor_backtest(session, res, result_json_rel_path=json_rel)
             
             # 4) 更新 factor_files.factor_values_path
             _upsert_factor_values_path(
                 session=session,
                 factor_id=res.factor_id,
                 factor_output_dir=factor_output_dir,
+                universe=res.test_universe,
             )
 
         session.commit()

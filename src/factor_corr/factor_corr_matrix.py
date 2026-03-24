@@ -18,6 +18,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from common.config import Config
 from common.db import get_db_manager
+from common.universe_service import normalize_universe_code
 from common.utils import setup_logger
 from backtest_core.backtest_core_runner import _load_factor_csv
 
@@ -50,32 +51,34 @@ def _load_valid_factor_ids(db_config_file: str) -> List[str]:
 def _find_latest_factor_csv(
     factor_output_dir: str,
     factor_id: str,
+    test_universe: str,
 ) -> str | None:
-    """在 factor_values 目录下找到某个因子最新的 CSV 文件路径"""
+    """在目标领域目录下找到某个因子最新的 CSV 文件路径。"""
     if not os.path.isdir(factor_output_dir):
         logger.warning(f"因子输出目录不存在: {factor_output_dir}")
         return None
 
     candidates: List[Tuple[datetime, str]] = []
+    u_tag = normalize_universe_code(test_universe)
+    prefix = f"{factor_id}_{u_tag}_"
 
     for fname in os.listdir(factor_output_dir):
         if not fname.lower().endswith(".csv"):
             continue
 
         name_no_ext = os.path.splitext(fname)[0]
-        if not name_no_ext.startswith(factor_id + "_"):
+        if not name_no_ext.startswith(prefix):
             continue
 
         parts = name_no_ext.split("_")
-        if len(parts) < 3:
+        if len(parts) < 4:
             continue
 
         try:
-            start_str = parts[-2]
             end_str = parts[-1]
             end_dt = datetime.strptime(end_str, "%Y-%m-%d")
         except Exception:
-            # 文件名不符合 `<factor_id>_<start>_<end>.csv` 约定时跳过
+            # 文件名不符合 `<factor_id>_<UNIVERSE>_<start>_<end>.csv` 约定时跳过
             continue
 
         full_path = os.path.join(factor_output_dir, fname)
@@ -96,12 +99,17 @@ def _load_factor_series_for_window(
     factor_ids: List[str],
     start_date: datetime,
     end_date: datetime,
+    test_universe: str,
 ) -> Dict[str, pd.Series]:
     """加载给定时间窗口内各因子的 factor_value 序列"""
     series_map: Dict[str, pd.Series] = {}
 
     for fid in factor_ids:
-        csv_path = _find_latest_factor_csv(factor_output_dir, fid)
+        csv_path = _find_latest_factor_csv(
+            factor_output_dir=factor_output_dir,
+            factor_id=fid,
+            test_universe=test_universe,
+        )
         if not csv_path:
             continue
 
@@ -150,6 +158,9 @@ def _build_corr_matrix(
     result: Dict[str, Dict[str, float]] = defaultdict(dict)
 
     factor_ids = list(factor_series.keys())
+    total_pairs = 0
+    non_nan_pairs = 0
+    overlap_pass_pairs = 0
 
     # 预先按日期聚合“该日哪些因子有值”，用于粗略估计重叠交易日
     idx = df.index
@@ -178,17 +189,30 @@ def _build_corr_matrix(
             if i == j:
                 continue
 
+            total_pairs += 1
             v = corr_df.at[i, j]
             if pd.isna(v):
                 continue
 
+            non_nan_pairs += 1
             key_pair = (i, j) if i < j else (j, i)
             days = overlap_days.get(key_pair, 0)
 
             if days < min_overlap_days:
                 continue
 
+            overlap_pass_pairs += 1
             result[i][j] = float(v)
+
+    logger.info(
+        "corr过滤统计: factor_count=%d, total_pairs=%d, non_nan_pairs=%d, "
+        "overlap_pass_pairs=%d, min_overlap_days=%d",
+        len(factor_ids),
+        total_pairs,
+        non_nan_pairs,
+        overlap_pass_pairs,
+        min_overlap_days,
+    )
 
     return result
 
@@ -197,12 +221,15 @@ def _build_payload(
     as_of_date: datetime,
     window_days: int,
     corr_dict: Dict[str, Dict[str, float]],
+    test_universe: str,
 ) -> Dict:
     """构建写入 Redis 的 JSON payload"""
     payload = {
         "as_of_date": as_of_date.strftime("%Y-%m-%d"),
+        "test_universe": normalize_universe_code(test_universe),
         "window": f"{window_days}d",
         "corr": corr_dict,
+        "generated_at": datetime.utcnow().isoformat(),
     }
 
     return payload
@@ -239,10 +266,12 @@ def _connect_redis(cfg: Config) -> redis.Redis:
 def _cleanup_old_keys(
     client: redis.Redis,
     prefix: str,
+    test_universe: str,
     keep_days: int,
 ) -> None:
-    """清理过旧的 factor:corr:* key，只保留最近 keep_days 天"""
-    pattern = f"{prefix}:*"
+    """清理过旧的领域相关性 key，只保留最近 keep_days 个快照。"""
+    u_tag = normalize_universe_code(test_universe)
+    pattern = f"{prefix}:{u_tag}:*"
     keys = list(client.scan_iter(match=pattern))
 
     if not keys:
@@ -252,8 +281,11 @@ def _cleanup_old_keys(
     keep_after = today - timedelta(days=keep_days)
 
     for key in keys:
+        if key.endswith(":latest"):
+            continue
+
         try:
-            suffix = key.split(":", 2)[-1]
+            suffix = key.rsplit(":", 1)[-1]
             dt = datetime.strptime(suffix, "%Y%m%d").date()
         except Exception:
             continue
@@ -264,7 +296,7 @@ def _cleanup_old_keys(
 
 
 def run_factor_corr_matrix(config_file: str = "src/factor_corr/config.ini") -> None:
-    """主入口：计算因子相关性矩阵并写入 Redis"""
+    """主入口：按调度周期计算相关性快照并写入 Redis。"""
     logger.info("启动 factor_corr_matrix 任务")
 
     cfg = Config(config_file=config_file)
@@ -278,11 +310,15 @@ def run_factor_corr_matrix(config_file: str = "src/factor_corr/config.ini") -> N
     min_overlap_days = cfg.getint("factor_corr", "min_overlap_days", fallback=120)
     redis_key_prefix = cfg.get("factor_corr", "redis_key_prefix", fallback="factor:corr")
     keep_days = cfg.getint("factor_corr", "keep_days", fallback=30)
-    factor_output_dir = cfg.get(
-        "factor_corr",
-        "factor_output_dir",
-        fallback="factor_values",
+    test_universe = normalize_universe_code(
+        cfg.get("factor_corr", "test_universe", fallback="ALL")
     )
+    factor_output_root = cfg.get(
+        "factor_corr",
+        "factor_output_root",
+        fallback="factor_values/by_universe",
+    ).strip()
+    factor_output_dir = os.path.join(factor_output_root, test_universe)
 
     as_of_str = cfg.get("factor_corr", "as_of_date", fallback="")
     if as_of_str:
@@ -293,7 +329,8 @@ def run_factor_corr_matrix(config_file: str = "src/factor_corr/config.ini") -> N
     start_date = as_of_date - timedelta(days=window_days)
     logger.info(
         f"相关性计算窗口: {start_date.date()} ~ {as_of_date.date()}, "
-        f"window_days={window_days}, min_overlap_days={min_overlap_days}"
+        f"window_days={window_days}, min_overlap_days={min_overlap_days}, "
+        f"test_universe={test_universe}, factor_output_dir={factor_output_dir}"
     )
 
     # 1) 加载有效因子列表
@@ -324,6 +361,7 @@ def run_factor_corr_matrix(config_file: str = "src/factor_corr/config.ini") -> N
         factor_ids=factor_ids,
         start_date=start_date,
         end_date=as_of_date,
+        test_universe=test_universe,
     )
     if not factor_series:
         logger.warning("窗口内未加载到任何因子序列，结束任务")
@@ -343,18 +381,23 @@ def run_factor_corr_matrix(config_file: str = "src/factor_corr/config.ini") -> N
         as_of_date=as_of_date,
         window_days=window_days,
         corr_dict=corr_dict,
+        test_universe=test_universe,
     )
     redis_client = _connect_redis(cfg)
-    redis_key = f"{redis_key_prefix}:{as_of_date.strftime('%Y%m%d')}"
+    redis_key = f"{redis_key_prefix}:{test_universe}:{as_of_date.strftime('%Y%m%d')}"
+    latest_key = f"{redis_key_prefix}:{test_universe}:latest"
 
     redis_client.set(redis_key, json.dumps(payload, ensure_ascii=False))
+    redis_client.set(latest_key, json.dumps(payload, ensure_ascii=False))
     logger.info(f"相关性矩阵已写入 Redis, key={redis_key}")
+    logger.info(f"相关性矩阵 latest 指针已更新, key={latest_key}")
 
     # 5) 清理旧 key
     if keep_days > 0:
         _cleanup_old_keys(
             client=redis_client,
             prefix=redis_key_prefix,
+            test_universe=test_universe,
             keep_days=keep_days,
         )
 
