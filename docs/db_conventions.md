@@ -7,8 +7,9 @@
 ### 1. 表作用边界
 
 - `factor_basic`：因子基础元信息（名称、类型、股票池、周期、来源、有效状态等），**所有因子的中心表**。
-- `factor_files`：因子对应的文件路径信息（md / 回测 JSON / 日志），**只负责“文件在哪”**。  
-- **（规划）`factor_value_files`**：按 `(factor_id, universe)` 存 **真分域因子值 CSV** 等路径；详见 `docs/因子侧真分域因子值_设计与落地步骤.md`。落地前多域值路径勿与 `factor_files` 单行混用语义。
+- `factor_files`：因子对应的文件路径信息（md / 回测 JSON / 日志 / 可选缓存列 `factor_values_path`），**只负责“文件在哪”**。  
+  - **`factor_values_path`**：批量因子值 CSV 的**兼容/缓存指针**；**权威路径**见 `factor_value_files`。`backtest_io` **不再**按本次回测域覆盖该列；需要与磁盘一致时可跑 `src/backtest_io/sync_factor_values_path_runner.py`（见 `docs/真分域收尾与策略工厂接入_落地步骤.md`）。  
+- **`factor_value_files`**：按 `(factor_id, universe, artifact_type, …)` 存 **真分域因子值 CSV** 等路径（引擎写入 `batch_csv`）；详见 `docs/因子侧真分域因子值_设计与落地步骤.md`。策略工厂加载批量因子值时应**优先查此表**。
 - 真分域路径约定（已定）：`factor_values/by_universe/{UNIVERSE}/{factor_id}_{UNIVERSE}_{start}_{end}.csv`；**ALL 也在 `by_universe/ALL/`，不再使用旧扁平 `factor_values/` 作为主路径**。
 - `factor_backtest`：因子每一次回测的结果记录（IC/IC_IR/夏普/回撤/换手率等）；**多领域**时同一 `factor_id` 多行，以 `test_universe` 区分，并可有 `result_json_rel_path`。  
 - `factor_universe_status`：因子在 **各实证域** 上是否过阈（`is_valid`）；**权威按域状态**。`factor_basic.is_valid` 为其派生：**任一侧为 TRUE 则为 TRUE**（供日更等兼容查询）。  

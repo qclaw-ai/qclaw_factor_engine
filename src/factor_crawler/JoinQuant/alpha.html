@@ -1,0 +1,4121 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>alpha191因子 - JoinQuant</title>
+        <meta name="keywords" content="joinquant,聚宽,量化,宽客,quant,量化交易,量化平台,量化投资,量化策略,程序化交易,量化投研平台,python,金融工程,level2,level1" />
+        <meta name="description" content="聚宽（JoinQuant）量化投研平台是为量化爱好者（宽客）量身打造的云平台，我们为您提供精准的回测功能、高速实盘交易接口、易用的API文档、由易入难的策略库，便于您快速实现、使用自己的量化交易策略。" />
+        <meta name="viewport" content="width=device-width, initial-scale=1,minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <meta name="vipType" content="''">
+        <meta name="tick-access" content="0" />
+	            <link type='text/css'  href="https://cdn.joinquant.com/common/css/lib.min.css?v=1772433728242" rel='stylesheet'></link>
+        <link type='text/css'  href="https://cdn.joinquant.com/common/css/common.min.css?v=1772433728242" rel='stylesheet'></link>
+        <link rel="stylesheet" href="https://cdn.joinquant.com/themes/jq/static/common/css/jq-common.min.css?v=1772433728242">
+                <link rel="stylesheet" href="https://cdn.joinquant.com/themes/jq/static/default/css/newUserTip.css?v=1772433728242">
+        <link rel="stylesheet" href="https://cdn.joinquant.com/themes/jq/dist/static_v2/default/backtotop/detail/index/index.component.bundle.css?v=1772433728242">
+	      <link rel="icon" href="https://cdn.joinquant.com/common/img/favicon-16-16.png?v=2" type="image/x-icon">
+
+        <link rel="stylesheet" type='text/css' href="https://cdn.joinquant.com/dist/static_v2/global/user/login/index/index.component.bundle.css?v=1772433728242" />
+        <link rel="stylesheet" type='text/css' href="https://cdn.joinquant.com/user/css/unreadMsg.css?v=1772433728242" />
+        <link type='text/css'  href="https://cdn.joinquant.com/themes/jq/static/default/css/iconfont.css" rel='stylesheet'/>
+
+        
+<link rel="stylesheet" type="text/css" href="https://cdn.joinquant.com/third/markdown/default2.css">
+<style>
+    .api_cont{font-size:15px}
+    .api_cont ul,.api_cont ol{padding-left:40px}
+    .api_cont li{list-style:disc;}
+    .api_cont ul li ul li{list-style:circle;}
+    .api_cont ol li{list-style:decimal;}
+</style>
+
+<style>
+	.api_left ul{
+	   	color:#337ab7;
+   }
+	.api_left li a{
+   		font-weight:bold;
+   }
+   .api_left li[class^="indent"] a{
+		font-weight: normal;
+   }
+	.api_left li[class^="indent2"] {
+		list-style: disc inside;
+   }
+   .api_body .api_left a {
+       display: inline-block;
+       max-width: 207px;
+       vertical-align: bottom;
+   }
+
+   .api_body .api_left{
+      width:250px;
+   }
+   /*.api_body .api_right{
+      padding-left:250px;
+   }*/
+</style>
+
+<style>
+    .kk_body{
+        padding-bottom:0px;
+    }
+</style>
+
+                                                                        <style>
+        span.new{
+        background: rgba(0,0,0,0);
+    }
+    .side-bar .top .name.user-alias img{
+        width:16px;
+        height:16px;
+        float: none;
+        margin-right:0;
+    }
+    .kk_footer .wp20.last img{
+        position: relative;
+        top:-2px;
+    }
+    .kk_footer .wp20.last .item>a{
+        position: relative;
+        left:-5px;
+    }
+        </style>
+    <script type='text/javascript'>
+        var _vds = _vds || [];
+        window._vds = _vds;
+        (function(){
+                            _vds.push(['setAccountId', '949f6a566feb9b09']);
+                                        _vds.push(['trackBot', false]);
+         (function() {
+           // if (window.location.href.indexOf('www.joinquant.com') > -1) {
+            //  var vds = document.createElement('script');
+            //  vds.type='text/javascript';
+            //  vds.async = true;
+            //  vds.src = ('https:' == document.location.protocol ? 'https://' : 'http://') + 'assets.giocdn.com/vds.js';
+            //  var s = document.getElementsByTagName('script')[0];
+            //  s.parentNode.insertBefore(vds, s);
+           // }
+         })();
+        })();
+        var g_domain = 'https://www.joinquant.com';
+        var g_filedomain = 'https://file.joinquant.com';
+
+        </script>
+    </head>
+    <body >
+                                <div class="kk_main in_wrap">
+                        
+            <header id="kk_nav" class="fixed-top kk_nav navbar narbar-static-top heigh_nav">
+              <div class="kk_nav_container js-jq-header" ></div>
+            </header>
+            
+            <!--/header-->
+
+            <!-- <div class="kk_body  js-jq-body hidden top_50  "> -->
+            <div class="kk_body js-jq-body top_50  ">
+                <div class="api_body clearfix">
+    <div class="api_left api_left">
+        <ul>
+
+        </ul>
+    </div>
+    <div class="api_right api_right">
+        <div class="api_cont">
+            <div id="preview-contents" style="padding-left: 35px; padding-right: 35px; padding-bottom: 30px;">
+              <h2 id="短周期价量特征-191-alphas-因子函数使用说明">短周期价量特征 191 Alphas 因子函数使用说明</h2>
+
+
+
+<h3 id="因子来源">因子来源</h3>
+
+<p>通过交易型阿尔法策略的研究，发现在 A 股市场，与传统多因子模型所获取的股票价值阿尔法收益相比，交易型阿尔法收益的空间更大、收益稳定性也更强。</p>
+
+<p>短周期交易型阿尔法体系既是对传统多因子体系的补充，也可以说是全新思路、独立设计的交易体系。在这其中，量化模型不再仅仅是低风险低收益的投资策略，同样也可获得高额的收益回报。</p>
+
+<p>JoinQuant聚宽（专业的量化投研平台）旨在为大家提供更多的投资思路及可使用的数据，因此我们根据国泰君安数量化专题研究报告 -  <a href="http://vdisk.weibo.com/s/uEfe2futCdyJ9"><em>基于短周期价量特征的多因子选股体系</em></a>给出了 191 个短周期交易型阿尔法因子，方便大家使用。</p>
+
+<p>其中因子数据则均来自于个股日频率的价格与成交量数据，并且在编写短周期交易型 Alpha191因子时，有对缺失部分和不合理部分的因子公式进行调整。</p>
+
+<p>我们初衷是想为大家提供更多的投资思路及可使用的数据。至于这些因子如何使用能达到策略最佳收益，或者说这些因子是否适用于A股市场等问题，还需要大家自己去研究与钻研。</p>
+
+<p><strong>注：在对编写 alpha191因子时，有对缺失部分和不合理部分的因子公式进行调整</strong></p>
+
+
+
+<h3 id="因子使用">因子使用</h3>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs "><span class="hljs-comment"># 导入 Alpha191 库</span>
+<span class="hljs-prompt">&gt;&gt;&gt; </span><span class="hljs-keyword">from</span> jqlib.alpha191 <span class="hljs-keyword">import</span> *
+
+<span class="hljs-comment"># 获取沪深300成分股的 alpha_001 因子值</span>
+&gt;&gt;&gt;end_date = <span class="hljs-string">'2017-03-10'</span>
+&gt;&gt;&gt;code= list(get_index_stocks(<span class="hljs-string">'000300.XSHG'</span>))
+<span class="hljs-prompt">&gt;&gt;&gt; </span>a = alpha_001(code,end_date)
+
+<span class="hljs-comment"># 查看前5行的因子值</span>
+<span class="hljs-prompt">&gt;&gt;&gt; </span>a.head()
+<span class="hljs-number">000001.</span>XSHE   -<span class="hljs-number">0.496667</span>
+<span class="hljs-number">000002.</span>XSHE    <span class="hljs-number">0.226667</span>
+<span class="hljs-number">000008.</span>XSHE   -<span class="hljs-number">0.043333</span>
+<span class="hljs-number">000009.</span>XSHE   -<span class="hljs-number">0.093333</span>
+<span class="hljs-number">000027.</span>XSHE   -<span class="hljs-number">0.030000</span>
+Name: rank_value_boolean, dtype: float64
+
+<span class="hljs-comment"># 查看平安银行的因子值</span>
+<span class="hljs-prompt">&gt;&gt;&gt; </span>a[<span class="hljs-string">'000001.XSHE'</span>]
+-<span class="hljs-number">0.067912591286056825</span>
+
+<span class="hljs-comment"># 获取所有股票 alpha_007 的因子值</span>
+&gt;&gt;&gt;end_date = <span class="hljs-string">'2017-04-04'</span>
+&gt;&gt;&gt;code = list(get_all_securities([<span class="hljs-string">'stock'</span>],date=end_date).index)
+<span class="hljs-prompt">&gt;&gt;&gt; </span>a = alpha_007(code,end_date)
+<span class="hljs-comment"># 查看欣旺达(300207)的因子值</span>
+<span class="hljs-prompt">&gt;&gt;&gt; </span>a[<span class="hljs-string">'300207.XSHE'</span>]
+<span class="hljs-number">1.2494895018526142</span>
+
+<span class="hljs-comment"># 查询函数说明</span>
+<span class="hljs-prompt">&gt;&gt;&gt; </span>alpha_001?
+Signature: alpha_001(code, end_date=<span class="hljs-keyword">None</span>)
+Docstring:
+公式：
+    (-<span class="hljs-number">1</span> * CORR(RANK(DELTA(LOG(VOLUME),<span class="hljs-number">1</span>)),RANK(((CLOSE-OPEN)/OPEN)),<span class="hljs-number">6</span>)
+Inputs:
+    code: 股票池
+    end_date: 查询日期
+Outputs:
+    因子的值
+File:      ~/alpha191.py
+Type:      function</code></pre>
+
+
+
+<h3 id="公用函数说明">公用函数说明</h3>
+
+<p><strong>股票的默认获取时间长度为截止日期的前350个交易日</strong></p>
+
+<p>OPEN  <br>
+<em>开盘价</em></p>
+
+<p>HIGH  <br>
+<em>最高价</em></p>
+
+<p>LOW  <br>
+<em>最低价</em></p>
+
+<p>CLOSE  <br>
+<em>收盘价</em></p>
+
+<p>VWAP  <br>
+<em>均价</em></p>
+
+<p>VOLUME  <br>
+<em>成交量</em></p>
+
+<p>AMOUNT  <br>
+<em>成交额</em></p>
+
+<p>BANCHMARKINDEXCLOSE  <br>
+<em>基准指数的开盘价</em></p>
+
+<p>BANCHMARKINDEXOPEN  <br>
+<em>基准指数的收盘价</em></p>
+
+<p>RET  <br>
+<em>每日收益率（收盘/前收盘-1）</em></p>
+
+<p>DTM  <br>
+<em>(OPEN&lt;=DELAY(OPEN,1)?0:MAX((HIGH-OPEN),(OPEN-DELAY(OPEN,1))))</em></p>
+
+<p>DBM  <br>
+<em>(OPEN&gt;=DELAY(OPEN,1)?0:MAX((OPEN-LOW),(OPEN-DELAY(OPEN,1))))</em></p>
+
+<p>TR <br>
+<em>MAX(MAX(HIGH-LOW,ABS(HIGH-DELAY(CLOSE,1))),ABS(LOW-DELAY(CLOSE,1)))</em></p>
+
+<p>HD  <br>
+<em>HIGH-DELAY(HIGH,1)</em></p>
+
+<p>LD  <br>
+<em>DELAY(LOW,1)-LOW</em></p>
+
+<p>HML SMB MKE  <br>
+<em>Fama French 三因子</em></p>
+
+<p>SELF  <br>
+<em>特殊变量，出现在 Alpha143，表示 t-1 日的 Alpha143 因子计算结果</em></p>
+
+<p>RANK(A)  <br>
+<em>向量 A 升序排序</em></p>
+
+<p>MAX(A, B)  <br>
+<em>在 A,B 中选择最大的数</em></p>
+
+<p>MIN(A, B)  <br>
+<em>在 A,B 中选择最小的数</em></p>
+
+<p>STD(A, n)  <br>
+<em>序列 A 过去 n 天标准差</em></p>
+
+<p>CORR(A, B, n)  <br>
+<em>序列 A、 B 过去 n 天相关系数</em></p>
+
+<p>DELTA(A, n)  <br>
+<script type="math/tex" id="MathJax-Element-1"> A_{i} - A_{i-n} </script></p>
+
+<p>LOG(A)  <br>
+<em>自然对数函数</em></p>
+
+<p>SUM(A, n)  <br>
+<em>序列 A 过去 n 天求和</em></p>
+
+<p>ABS(A)  <br>
+<em>绝对值函数</em></p>
+
+<p>MEAN(A, n)  <br>
+<em>序列 A 过去 n 天均值</em></p>
+
+<p>TSRANK(A, n)  <br>
+<em>序列 A 的末位值在过去 n 天的顺序排位</em></p>
+
+<p>SIGN(A) <br>
+<em>符号函数：1 if A&gt;0; o if A=0 ; -1 if A \&lt;0;</em></p>
+
+<p>COVIANCE (A, B, n)  <br>
+<em>序列 A、 B 过去 n 天协方差</em></p>
+
+<p>DELAY(A, n)  <br>
+<script type="math/tex" id="MathJax-Element-2"> A_{i-n} </script></p>
+
+<p>TSMIN(A, n)  <br>
+<em>序列 A 过去 n 天的最小值</em></p>
+
+<p>TSMAX(A, n)  <br>
+<em>序列 A 过去 n 天的最大值</em></p>
+
+<p>PROD(A, n)  <br>
+<em>序列 A 过去 n 天累乘</em></p>
+
+<p>COUNT(condition, n)  <br>
+<em>计算前 n 期满足条件 condition 的样本个数</em></p>
+
+<p>REGBETA(A, B, n)  <br>
+<em>前 n 期样本 A 对 B 做回归所得回归系数</em></p>
+
+<p>REGRESI(A, B, n)  <br>
+<em>前 n 期样本 A 对 B 做回归所得的残差</em></p>
+
+<p>SMA(A, n, m)</p>
+
+<p><script type="math/tex" id="MathJax-Element-3"> \hat{y}_{i+1} = (A_{i}m + \hat{y}_{i}(n-m))/n </script>  ，其中 Yˆ 表示最终结果</p>
+
+<p>SUMIF(A, n, condition)  <br>
+<em>对 A 前 n 项条件求和，其中 condition 表示选择条件</em></p>
+
+<p>WMA(A, n)  <br>
+<em>计算 A前 n期样本加权平均值权重为 0.9i，(i 表示样本距离当前时点的间隔)</em></p>
+
+<p>DECAYLINEAR(A, d)  <br>
+<em>对 A 序列计算移动平均加权，其中权重对应 d,d-1,…,1（权重和为 1）</em></p>
+
+<p>FILTER(A, condition)  <br>
+<em>对 A 筛选出符合选择条件 condition 的样本</em></p>
+
+<p>HIGHDAY(A, n)  <br>
+<em>计算 A 前 n 期时间序列中最大值距离当前时点的间隔</em></p>
+
+<p>LOWDAY(A, n)  <br>
+<em>计算 A 前 n 期时间序列中最小值距离当前时点的间隔</em></p>
+
+<p>SEQUENCE(n)  <br>
+<em>生成 1~n 的等差序列</em></p>
+
+<p>SUMAC(A, n)  <br>
+<em>计算 A 的前 n 项的累加</em></p>
+
+<p>&amp;  <br>
+<em>逻辑运算与</em></p>
+
+<p>||  <br>
+<em>逻辑运算或</em></p>
+
+<p>A?B:C  <br>
+<em>若 A 成立，则为 B，否则为 C</em></p>
+
+
+
+<h3 id="因子说明">因子说明</h3>
+
+<p><strong>在对编写 alpha191因子时，有对缺失部分和不合理部分的因子公式进行调整</strong></p>
+
+
+
+<h4 id="alpha获取全部因子值">alpha(获取全部因子值)</h4>
+
+<p>获取标的191个全部因子值，因计算量较大，运行会有少许缓慢</p>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha(code,benchmark=<span class="hljs-string">'000300.XSHG'</span>,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 DataFrame，包括股票列表中每一只股票的 alpha001-alpha191 的值</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha001">alpha_001</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_001(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1 * CORR(RANK(DELTA(LOG(VOLUME),1)),RANK(((CLOSE-OPEN)/OPEN)),6)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha002">alpha_002</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_002(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+-1 * delta((((close-low)-(high-close))/((high-low)),1))</li>
+</ul>
+
+
+
+<h4 id="alpha003">alpha_003</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_003(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM((CLOSE=DELAY(CLOSE,1)?0:CLOSE-(CLOSE&gt;DELAY(CLOSE,1)?MIN(LOW,DELAY(CLOSE,1)):MAX(HIGH,DELAY(CLOSE,1)))),6)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha004">alpha_004</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_004(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((((SUM(CLOSE,8)/8)+STD(CLOSE,8))&lt;(SUM(CLOSE,2)/2))?(-1*1):(((SUM(CLOSE,2)/2)&lt;((SUM(CLOSE,8)/8)-STD(CLOSE,8)))?1:(((1&lt;(VOLUME/MEAN(VOLUME,20)))||((VOLUME/MEAN(VOLUME,20))==1))?1:(-1*1))))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha005">alpha_005</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_005(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*TSMAX(CORR(TSRANK(VOLUME,5),YSRANK(HIGH,5),5),3))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha006">alpha_006</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_006(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(SIGN(DELTA((((OPEN*0.85)+(HIGH*0.15))),4)))*-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha007">alpha_007</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_007(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((RANK(MAX((VWAP-CLOSE),3))+RANK(MIN((VWAP-CLOSE),3)))*RANK(DELTA(VOLUME,3)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha008">alpha_008</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_008(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>RANK(DELTA(((((HIGH+LOW)/2)<em>0.2)+(VWAP*0.8)),4)</em>-1</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha009">alpha_009</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_009(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(((HIGH+LOW)/2-(DELAY(HIGH,1)+DELAY(LOW,1))/*(HIGH-LOW)/VOLUME,7，2)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha010">alpha_010</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_010(code,end_date=<span class="hljs-keyword">None</span>)
+</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(MAX(((RET\&lt;0)?STD(RET,20):CLOSE)^2),5))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha011">alpha_011</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_011(code,end_date=<span class="hljs-keyword">None</span>)
+</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(SUM(((CLOSE-LOW)-(HIGH-CLOSE))./(HIGH-LOW).*VOLUME,6)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha012">alpha_012</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_012(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK((OPEN-(SUM(VWAP,10)/10))))<em>(-1</em>(RANK(ABS((CLOSE-VWAP)))))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha013">alpha_013</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_013(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(((HIGH*LOW)^0.5)-VWAP)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha014">alpha_014</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_014(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>CLOSE-DELAY(CLOSE,5)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha015">alpha_015</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_015(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>OPEN/DELAY(CLOSE,1)-1</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha016">alpha_016</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_016(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*TSMAX(RANK(CORR(RANK(VOLUME),RANK(VWAP),5)),5))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha017">alpha_017</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_017(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>RANK((VWAP-MAX(VWAP,15)))^DELTA(CLOSE,5)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha018">alpha_018</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_018(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>CLOSE/DELAY(CLOSE,5)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha019">alpha_019</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_019(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(CLOSE&lt;DELAY(CLOSE,5)?(CLOSE-DELAY(CLOSE,5))/DELAY(CLOSE,5):(CLOSE=DELAY(CLOSE,5)?0:(CLOSE-DELAY(CLOSE,5))/CLOSE))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha020">alpha_020</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_020(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(CLOSE-DELAY(CLOSE,6))/DELAY(CLOSE,6)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha021">alpha_021</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_021(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>REGBETA(MEAN(CLOSE,6),SEQUENCE(6))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha022">alpha_022</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_022(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMEAN(((CLOSE-MEAN(CLOSE,6))/MEAN(CLOSE,6)-DELAY((CLOSE-MEAN(CLOSE,6))/MEAN(CLOSE,6),3)),12,1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha023">alpha_023</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_023(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA((CLOSE&gt;DELAY(CLOSE,1)?STD(CLOSE:20),0),20,1)/(SMA((CLOSE&gt;DELAY(CLOSE,1)?STD(CLOSE,20):0),20,1)+SMA((CLOSE&lt;=DELAY(CLOSE,1)?STD(CLOSE,20):0),20,1))*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha024">alpha_024</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_024(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(CLOSE-DELAY(CLOSE,5),5,1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha025">alpha_025</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_025(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((-1*RANK((DELTA(CLOSE,7)<em>(1-RANK(DECAYLINEAR((VOLUME/MEAN(VOLUME,20)),9))))))</em>(1+RANK(SUM(RET,250))))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha026">alpha_026</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_026(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((((SUM(CLOSE,7)/7)-CLOSE))+((CORR(VWAP,DELAY(CLOSE,5),230))))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha027">alpha_027</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_027(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>WMA((CLOSE-DELAY(CLOSE,3))/DELAY(CLOSE,3)*100+(CLOSE-DELAY(CLOSE,6))/DELAY(CLOSE,6)*100,12)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha028">alpha_028</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_028(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>3*SMA((CLOSE-TSMIN(LOW,9))/(TSMAX(HIGH,9)-TSMIN(LOW,9))*100,3,1)-2*SMA(SMA((CLOSE-TSMIN(LOW,9))/( MAX(HIGH,9)-TSMAX(LOW,9))*100,3,1),3,1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha029">alpha_029</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_029(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(CLOSE-DELAY(CLOSE,6))/DELAY(CLOSE,6)*VOLUME</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha030尚未实现">alpha_030（尚未实现）</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_030(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>WMA((REGRESI(CLOSE/DELAY(CLOSE)-1,MKT,SMB,HML，60))^2,20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha031">alpha_031</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_031(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>LOSE-MEAN(CLOSE,12))/MEAN(CLOSE,12)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha032">alpha_032</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_032(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*SUM(RANK(CORR(RANK(HIGH),RANK(VOLUME),3)),3))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha033">alpha_033</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_033(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((((-1*TSMIN(LOW,5))+DELAY(TSMIN(LOW,5),5))*RANK(((SUM(RET,240)-SUM(RET,20))/220)))*TSRANK(VOLUME,5))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha034">alpha_034</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_034(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>MEAN(CLOSE,12)/CLOSE</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha035">alpha_035</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_035(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(MIN(RANK(DECAYLINEAR(DELTA(OPEN,1),15)),RANK(DECAYLINEAR(CORR((VOLUME),((OPEN*0.65)+(OPEN*0.35)),17),7)))*-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha036">alpha_036</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_036(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>RANK(SUM(CORR(RANK(VOLUME),RANK(VWAP)),6),2)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha037">alpha_037</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_037(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*RANK(((SUM(OPEN,5)*SUM(RET,5))-DELAY((SUM(OPEN,5)*SUM(RET,5)),10))))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha038">alpha_038</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_038(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(((SUM(HIGH,20)/20)&lt;HIGH)?(-1*DELTA(HIGH,2)):0)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha039">alpha_039</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_039(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((RANK(DECAYLINEAR(DELTA((CLOSE),2),8))-RANK(DECAYLINEAR(CORR(((VWAP*0.3)+(OPEN*0.7)),SUM(MEAN(VOLUME,180),37),14),12)))*-1</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha040">alpha_040</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_040(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM((CLOSE&gt;DELAY(CLOSE,1)?VOLUME:0),26)/SUM((CLOSE&lt;=DELAY(CLOSE,1)?VOLUME:0),26)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha041">alpha_041</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_041(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(MAX(DELTA((VWAP),3),5))*-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha042">alpha_042</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_042(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*RANK(STD(HIGH,10)))*CORR(HIGH,VOLUME,10))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha043">alpha_043</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_043(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM((CLOSE&gt;DELAY(CLOSE,1)?VOLUME:(CLOSE&lt;DELAY(CLOSE,1)?-VOLUME:0)),6)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha044">alpha_044</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_044(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(TSRANK(DECAYLINEAR(CORR(((LOW)),MEAN(VOLUME,10),7),6),4)+TSRANK(DECAYLINEAR(DELTA((VWAP),3),10),15))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha045">alpha_045</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_045(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(DELTA((((CLOSE*0.6)+(OPEN*0.4))),1))*RANK(CORR(VWAP,MEAN(VOLUME,150),15)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha046">alpha_046</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_046(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(MEAN(CLOSE,3)+MEAN(CLOSE,6)+MEAN(CLOSE,12)+MEAN(CLOSE,24))/(4*CLOSE)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha047">alpha_047</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_047(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA((TSMAX(HIGH,6)-CLOSE)/(TSMAX(HIGH,6)-TSMIN(LOW,6))*100,9,1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha048">alpha_048</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_048(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*((RANK(((SIGN((CLOSE-DELAY(CLOSE,1)))+SIGN((DELAY(CLOSE,1)-DELAY(CLOSE,2))))+SIGN((DELAY(CLOSE,2)-DELAY(CLOSE,3))))))*SUM(VOLUME,5))/SUM(VOLUME,20))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha049">alpha_049</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_049(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM(((HIGH+LOW)&gt;=(DELAY(HIGH,1)+DELAY(LOW,1))?0:MAX(ABS(HIGH-DELAY(HIGH,1)),ABS(LOW-DELAY(LOW,1)))),12)/(SUM(((HIGH+LOW)&gt;=(DELAY(HIGH,1)+DELAY(LOW,1))?0:MAX(ABS(HIGH-DELAY(HIGH,1)),ABS(LOW-DELAY(LOW,1)))),12)+SUM(((HIGH+LOW)&lt;=(DELAY(HIGH,1)+DELAY(LOW,1))?0:MAX(ABS(HIGH-DELAY(HI GH,1)),ABS(LOW-DELAY(LOW,1)))),12))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha050">alpha_050</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_050(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM(((HIGH+LOW)&lt;=(DELAY(HIGH,1)+DELAY(LOW,1))?0:MAX(ABS(HIGH-DELAY(HIGH,1)),ABS(LOW-DELAY(LOW,1)))),12)/(SUM(((HIGH+LOW)&lt;=(DELAY(HIGH,1)+DELAY(LOW,1))?0:MAX(ABS(HIGH-DELAY(HIGH,1)),ABS(LOW-DELAY(LOW,1)))),12)+SUM(((HIGH+LOW)&gt;=(DELAY(HIGH,1)+DELAY(LOW,1))?0:MAX(ABS(HIGH-DELAY(HIGH,1)),ABS(LOW-DELAY(LOW,1)))),12))-SUM(((HIGH+LOW)&gt;=(DELAY(HIGH,1)+DELAY(LOW,1))?0:MAX(ABS(HIGH-DELAY(HIGH,1)),ABS(LOW-DELAY(LOW,1)))),12)/(SUM(((HIGH+LOW)&gt;=(DELAY(HIGH,1)+DELAY(LOW,1))?0: MAX(ABS(HIGH-DELAY(HIGH,1)),ABS(LOW-DELAY(LOW,1)))),12)+SUM(((HIGH+LOW)&lt;=(DELAY(HIGH,1)+DELA Y(LOW,1))?0:MAX(ABS(HIGH-DELAY(HIGH,1)),ABS(LOW-DELAY(LOW,1)))),12))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha051">alpha_051</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_051(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li><p>因子公式：</p>
+
+<ul><li>SUM(((HIGH+LOW)&lt;=(DELAY(HIGH,1)+DELAY(LOW,1))?0:MAX(ABS(HIGH-DELAY(HIGH,1)),ABS(LOW-DELAY(LOW,1)))),12)/(SUM(((HIGH+LOW)&lt;=(DELAY(HIGH,1)+DELAY(LOW,1))?0:MAX(ABS(HIGH-DELAY(HIGH,1)),ABS(LOW-DELAY(LOW,1)))),12)+SUM(((HIGH+LOW)&gt;=(DELAY(HIGH,1)+DELAY(LOW,1))?0:MAX(ABS(HIGH-DELAY(HI GH,1)),ABS(LOW-DELAY(LOW,1)))),12))</li></ul>
+
+<h4 id="alpha052">alpha_052</h4></li>
+</ul>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_052(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM(MAX(0,HIGH-DELAY((HIGH+LOW+CLOSE)/3,1)),26)/SUM(MAX(0,DELAY((HIGH+LOW+CLOSE)/3,1)-L),26)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha053">alpha_053</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_053(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>COUNT(CLOSE&gt;DELAY(CLOSE,1),12)/12*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha054">alpha_054</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_054(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*RANK((STD(ABS(CLOSE-OPEN))+(CLOSE-OPEN))+CORR(CLOSE,OPEN,10)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha055">alpha_055</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_055(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM(16*(CLOSE-DELAY(CLOSE,1)+(CLOSE-OPEN)/2+DELAY(CLOSE,1)-DELAY(OPEN,1))/((ABS(HIGH-DELAY(CL OSE,1))&gt;ABS(LOW-DELAY(CLOSE,1))&amp;ABS(HIGH-DELAY(CLOSE,1))&gt;ABS(HIGH-DELAY(LOW,1))?ABS(HIGH-DELAY(CLOSE,1))+ABS(LOW-DELAY(CLOSE,1))/2+ABS(DELAY(CLOSE,1)-DELAY(OPEN,1))/4:(ABS(LOW-DELAY(CLOSE,1))&gt;ABS(HIGH-DELAY(LOW,1))&amp;ABS(LOW-DELAY(CLOSE,1))&gt;ABS(HIGH-DELAY(CLOSE,1))?ABS(LOW-DELAY(CLOSE,1))+ABS(HIGH-DELAY(CLOSE,1))/2+ABS(DELAY(CLOSE,1)-DELAY(OPEN,1))/4:ABS(HIGH-DELAY(LOW,1))+ABS(DELAY(CLOSE,1)-DELAY(OPEN,1))/4)))*MAX(ABS(HIGH-DELAY(CLOSE,1)),ABS(LOW-DELAY(CLOSE,1))),20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha056">alpha_056</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_056(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK((OPEN-TSMIN(OPEN,12)))&lt;RANK((RANK(CORR(SUM(((HIGH   +LOW)/2),19),SUM(MEAN(VOLUME,40),19),13))^5)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha057">alpha_057</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_057(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA((CLOSE-TSMIN(LOW,9))/(TSMAX(HIGH,9)-TSMIN(LOW,9))*100,3,1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha058">alpha_058</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_058(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>COUNT(CLOSE&gt;DELAY(CLOSE,1),20)/20*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha059">alpha_059</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_059(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM((CLOSE=DELAY(CLOSE,1)?0:CLOSE-(CLOSE&gt;DELAY(CLOSE,1)?MIN(LOW,DELAY(CLOSE,1)):MAX(HIGH,DELAY(CLOSE,1)))),20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha060">alpha_060</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_060(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM(((CLOSE-LOW)-(HIGH-CLOSE))./(HIGH-LOW).*VOLUME,20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha061">alpha_061</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_061(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(MAX(RANK(DECAYLINEAR(DELTA(VWAP,1),12)),RANK(DECAYLINEAR(RANK(CORR((LOW),MEAN(VOLUME,80),8)),17)))*-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha062">alpha_062</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_062(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*CORR(HIGH,RANK(VOLUME),5))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha063">alpha_063</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_063(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(MAX(CLOSE-DELAY(CLOSE,1),0),6,1)/SMA(ABS(CLOSE-DELAY(CLOSE,1)),6,1)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha064">alpha_064</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_064(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(MAX(RANK(DECAYLINEAR(CORR(RANK(VWAP),RANK(VOLUME),4),4)),RANK(DECAYLINEAR(MAX(CORR(RANK(CLOSE),RANK(MEAN(VOLUME,60)),4),13),14)))*-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha065">alpha_065</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_065(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>MEAN(CLOSE,6)/CLOSE</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha066">alpha_066</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_066(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(CLOSE-MEAN(CLOSE,6))/MEAN(CLOSE,6)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha067">alpha_067</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_067(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(MAX(CLOSE-DELAY(CLOSE,1),0),24,1)/SMA(ABS(CLOSE-DELAY(CLOSE,1)),24,1)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha068">alpha_068</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_068(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(((HIGH+LOW)/2-(DELAY(HIGH,1)+DELAY(LOW,1))/2)*(HIGH-LOW)/VOLUME,15,2)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha069">alpha_069</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_069(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(SUM(DTM,20)&gt;SUM(DBM,20)?(SUM(DTM,20)-SUM(DBM,20))/SUM(DTM,20):(SUM(DTM,20)=SUM(DBM,20)？0:(SUM(DTM,20)-SUM(DBM,20))/SUM(DBM,20)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha070">alpha_070</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_070(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>STD(AMOUNT,6)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha071">alpha_071</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_071(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(CLOSE-MEAN(CLOSE,24))/MEAN(CLOSE,24)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha072">alpha_072</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_072(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA((TSMAX(HIGH,6)-CLOSE)/(TSMAX(HIGH,6)-TSMIN(LOW,6))*100,15,1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha073">alpha_073</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_073(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((TSRANK(DECAYLINEAR(DECAYLINEAR(CORR((CLOSE),VOLUME,10),16),4),5)-RANK(DECAYLINEAR(CORR(VWAP,MEAN(VOLUME,30),4),3)))*-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha074">alpha_074</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_074(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(CORR(SUM(((LOW*0.35)+(VWAP*0.65)),20),SUM(MEAN(VOLUME,40),20),7))+RANK(CORR(RANK(VWAP),RANK(VOLUME),6))) </li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha075">alpha_075</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_075(code,benchmark=<span class="hljs-string">'000300.XSHG'</span>,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li>
+<li>benchmark:基准指数，默认为沪深300</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>BANCHMARKINDEXCLOSE&lt;BANCHMARKINDEXOPEN,50)/COUNT(BANCHMARKINDEXCLOSE&lt;BANCHMARKIN DEXOPEN,50)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha076">alpha_076</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_076(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>STD(ABS((CLOSE/DELAY(CLOSE,1)-1))/VOLUME,20)/MEAN(ABS((CLOSE/DELAY(CLOSE,1)-1))/VOLUME,20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha077">alpha_077</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_077(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>MIN(RANK(DECAYLINEAR(((((HIGH+LOW)/2)+HIGH)-(VWAP+HIGH)),20)),RANK(DECAYLINEAR(CORR(((HIGH+LOW)/2),MEAN(VOLUME,40),3),6)))  </li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha078">alpha_078</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_078(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((HIGH+LOW+CLOSE)/3-MA((HIGH+LOW+CLOSE)/3,12))/(0.015*MEAN(ABS(CLOSE-MEAN((HIGH+LOW+CLOSE)/3,12)),12)) </li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha079">alpha_079</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_079(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(MAX(CLOSE-DELAY(CLOSE,1),0),12,1)/SMA(ABS(CLOSE-DELAY(CLOSE,1)),12,1)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha080">alpha_080</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_080(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(VOLUME-DELAY(VOLUME,5))/DELAY(VOLUME,5)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha081">alpha_081</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_081(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(VOLUME,21,2)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha082">alpha_082</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_082(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA((TSMAX(HIGH,6)-CLOSE)/(TSMAX(HIGH,6)-TSMIN(LOW,6))*100,20,1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha083">alpha_083</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_083(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*RANK(COVIANCE(RANK(HIGH),RANK(VOLUME),5)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha084">alpha_084</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_084(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM((CLOSE&gt;DELAY(CLOSE,1)?VOLUME:(CLOSE&lt;DELAY(CLOSE,1)?-VOLUME:0)),20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha085">alpha_085</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_085(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(TSRANK((VOLUME/MEAN(VOLUME,20)),20)*TSRANK((-1*DELTA(CLOSE,7)),8))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha086">alpha_086</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_086(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((0.25&lt;(((DELAY(CLOSE,20)-DELAY(CLOSE,10))/10)-((DELAY(CLOSE,10)-CLOSE)/10)))?(-1*1):(((((DELAY(CLOSE,20)-DELAY(CLOSE,10))/10)-((DELAY(CLOSE,10)-CLOSE)/10))\&lt;0)?1:((-1*1)*(CLOSE-DELAY(CLOSE,1)))))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha087">alpha_087</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_087(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((RANK(DECAYLINEAR(DELTA(VWAP,4),7))+TSRANK(DECAYLINEAR(((((LOW*0.9)+(LOW*0.1))-VWAP)/(OPEN-((HIGH+LOW)/2))),11),7))*-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha088">alpha_088</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_088(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(CLOSE-DELAY(CLOSE,20))/DELAY(CLOSE,20)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha089">alpha_089</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_089(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>2*(SMA(CLOSE,13,2)-SMA(CLOSE,27,2)-SMA(SMA(CLOSE,13,2)-SMA(CLOSE,27,2),10,2))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha090">alpha_090</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_090(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(CORR(RANK(VWAP),RANK(VOLUME),5))*-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha091">alpha_091</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_091(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((RANK((CLOSE-MAX(CLOSE,5)))<em>RANK(CORR((MEAN(VOLUME,40)),LOW,5)))</em>-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha092">alpha_092</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_092(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(MAX(RANK(DECAYLINEAR(DELTA(((CLOSE*0.35)+(VWAP*0.65)),2),3)),TSRANK(DECAYLINEAR(ABS(CORR((MEAN(VOLUME,180)),CLOSE,13)),5),15))*-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha093">alpha_093</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_093(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM((OPEN&gt;=DELAY(OPEN,1)?0:MAX((OPEN-LOW),(OPEN-DELAY(OPEN,1)))),20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha094">alpha_094</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_094(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM((CLOSE&gt;DELAY(CLOSE,1)?VOLUME:(CLOSE&lt;DELAY(CLOSE,1)?-VOLUME:0)),30)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha095">alpha_095</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_095(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>STD(AMOUNT,20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha096">alpha_096</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_096(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(SMA((CLOSE-TSMIN(LOW,9))/(TSMAX(HIGH,9)-TSMIN(LOW,9))*100,3,1),3,1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha097">alpha_097</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_097(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>STD(VOLUME,10)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha098">alpha_098</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_098(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((((DELTA((SUM(CLOSE,100)/100),100)/DELAY(CLOSE,100))\&lt;0.05)||((DELTA((SUM(CLOSE,100)/100),100)/DELAY(CLOSE,100))==0.05))?(-1*(CLOSE-TSMIN(CLOSE,100))):(-1*DELTA(CLOSE,3)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha099">alpha_099</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_099(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*RANK(COVIANCE(RANK(CLOSE),RANK(VOLUME),5)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha100">alpha_100</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_100(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>STD(VOLUME,20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha101">alpha_101</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_101(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((RANK(CORR(CLOSE,SUM(MEAN(VOLUME,30),37),15))\</li></ul></li></ul>
+
+<h4 id="alpha102">alpha_102</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_102(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(MAX(VOLUME-DELAY(VOLUME,1),0),6,1)/SMA(ABS(VOLUME-DELAY(VOLUME,1)),6,1)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha103">alpha_103</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_103(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((20-LOWDAY(LOW,20))/20)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha104">alpha_104</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_104(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*(DELTA(CORR(HIGH,VOLUME,5),5)*RANK(STD(CLOSE,20))))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha105">alpha_105</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_105(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*CORR(RANK(OPEN),RANK(VOLUME),10))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha106">alpha_106</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_106(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>CLOSE-DELAY(CLOSE,20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha107">alpha_107</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_107(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(((-1*RANK((OPEN-DELAY(HIGH,1))))*RANK((OPEN-DELAY(CLOSE,1))))*RANK((OPEN-DELAY(LOW,1))))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha108">alpha_108</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_108(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((RANK((HIGH-MIN(HIGH,2)))^RANK(CORR((VWAP),(MEAN(VOLUME,120)),6)))*-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha109">alpha_109</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_109(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(HIGH-LOW,10,2)/SMA(SMA(HIGH-LOW,10,2),10,2)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha110">alpha_110</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_110(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM(MAX(0,HIGH-DELAY(CLOSE,1)),20)/SUM(MAX(0,DELAY(CLOSE,1)-LOW),20)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha111">alpha_111</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_111(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(VOL*((CLOSE-LOW)-(HIGH-CLOSE))/(HIGH-LOW),11,2)-SMA(VOL*((CLOSE-LOW)-(HIGH-CLOSE))/(HIGH-LOW),4,2)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha112">alpha_112</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_112(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(SUM((CLOSE-DELAY(CLOSE,1)&gt;0?CLOSE-DELAY(CLOSE,1):0),12)-SUM((CLOSE-DELAY(CLOSE,1)\&lt;0?ABS(CLOS E-DELAY(CLOSE,1)):0),12))/(SUM((CLOSE-DELAY(CLOSE,1)&gt;0?CLOSE-DELAY(CLOSE,1):0),12)+SUM((CLOSE-DE LAY(CLOSE,1)\&lt;0?ABS(CLOSE-DELAY(CLOSE,1)):0),12))*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha113">alpha_113</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_113(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*((RANK((SUM(DELAY(CLOSE,5),20)/20))*CORR(CLOSE,VOLUME,2))*RANK(CORR(SUM(CLOSE,5),SUM(CLOSE,20),2))))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha114">alpha_114</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_114(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((RANK(DELAY(((HIGH-LOW)/(SUM(CLOSE,5)/5)),2))*RANK(RANK(VOLUME)))/(((HIGH-LOW)/(SUM(CLOSE,5)/5))/(VWAP-CLOSE)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha115">alpha_115</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_115(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(CORR(((HIGH*0.9)+(CLOSE*0.1)),MEAN(VOLUME,30),10))^RANK(CORR(TSRANK(((HIGH+LOW)/2),4),TSRANK(VOLUME,10),7)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha116">alpha_116</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_116(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>REGBETA(CLOSE,SEQUENCE,20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha117">alpha_117</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_117(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((TSRANK(VOLUME,32)<em>(1-TSRANK(((CLOSE+HIGH)-LOW),16)))</em>(1-TSRANK(RET,32)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha118">alpha_118</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_118(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM(HIGH-OPEN,20)/SUM(OPEN-LOW,20)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha119">alpha_119</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_119(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(DECAYLINEAR(CORR(VWAP,SUM(MEAN(VOLUME,5),26),5),7))-RANK(DECAYLINEAR(TSRANK(MIN(CORR(RANK(OPEN),RANK(MEAN(VOLUME,15)),21),9),7),8)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha120">alpha_120</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_120(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK((VWAP-CLOSE))/RANK((VWAP+CLOSE)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha121">alpha_121</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_121(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((RANK((VWAP-MIN(VWAP,12)))^TSRANK(CORR(TSRANK(VWAP,20),TSRANK(MEAN(VOLUME,60),2),18),3))*-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha122">alpha_122</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_122(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(SMA(SMA(SMA(LOG(CLOSE),13,2),13,2),13,2)-DELAY(SMA(SMA(SMA(LOG(CLOSE),13,2),13,2),13,2),1))/DELAY(SMA(SMA(SMA(LOG(CLOSE),13,2),13,2),13,2),1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha123">alpha_123</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_123(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((RANK(CORR(SUM(((HIGH+LOW)/2),20),SUM(MEAN(VOLUME,60),20),9))\</li></ul></li></ul>
+
+<h4 id="alpha124">alpha_124</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_124(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(CLOSE-VWAP)/DECAYLINEAR(RANK(TSMAX(CLOSE,30)),2)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha125">alpha_125</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_125(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(DECAYLINEAR(CORR((VWAP),MEAN(VOLUME,80),17),20))/RANK(DECAYLINEAR(DELTA(((CLOSE*0.5)+(VWAP*0.5)),3),16)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha126">alpha_126</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_126(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(CLOSE+HIGH+LOW)/3</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha127">alpha_127</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_127(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(MEAN((100*(CLOSE-MAX(CLOSE,12))/(MAX(CLOSE,12)))^2))^(1/2)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha128">alpha_128</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_128(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>100-(100/(1+SUM(((HIGH+LOW+CLOSE)/3&gt;DELAY((HIGH+LOW+CLOSE)/3,1)?(HIGH+LOW+CLOSE)/3*VOLUM E:0),14)/SUM(((HIGH+LOW+CLOSE)/3\</li></ul></li></ul>
+
+<h4 id="alpha129">alpha_129</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_129(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM((CLOSE-DELAY(CLOSE,1)\&lt;0?ABS(CLOSE-DELAY(CLOSE,1)):0),12)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha130">alpha_130</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_130(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(DECAYLINEAR(CORR(((HIGH+LOW)/2),MEAN(VOLUME,40),9),10))/RANK(DECAYLINEAR(CORR(RANK(VWAP),RANK(VOLUME),7),3)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha131">alpha_131</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_131(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(DELAT(VWAP,1))^TSRANK(CORR(CLOSE,MEAN(VOLUME,50),18),18))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha132">alpha_132</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_132(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>MEAN(AMOUNT,20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha133">alpha_133</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_133(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((20-HIGHDAY(HIGH,20))/20)*100-((20-LOWDAY(LOW,20))/20)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha134">alpha_134</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_134(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(CLOSE-DELAY(CLOSE,12))/DELAY(CLOSE,12)*VOLUME</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha135">alpha_135</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_135(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+-SMA(DELAY(CLOSE/DELAY(CLOSE,20),1),20,1)</li>
+</ul>
+
+
+
+<h4 id="alpha136">alpha_136</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_136(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((-1*RANK(DELTA(RET,3)))*CORR(OPEN,VOLUME,10))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha137">alpha_137</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_137(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>16*(CLOSE-DELAY(CLOSE,1)+(CLOSE-OPEN)/2+DELAY(CLOSE,1)-DELAY(OPEN,1))/((ABS(HIGH-DELAY(CLOSE,1))&gt;ABS(LOW-DELAY(CLOSE,1)) &amp;ABS(HIGH-DELAY(CLOSE,1))&gt;ABS(HIGH-DELAY(LOW,1))?ABS(HIGH-DELAY(CLOSE,1))+ABS(LOW-DELAY(CLOSE,1))/2+ABS(DELAY(CLOSE,1)-DELAY(OPEN,1))/4:(ABS(LOW-DELAY(CLOSE,1))&gt;ABS(HIGH-DELAY(LOW,1)) &amp; ABS(LOW-DELAY(CLOSE,1))&gt;ABS(HIGH-DELAY(CLOSE,1))?ABS(LOW-DELAY(CLOSE,1))+ABS(HIGH-DELAY(CLOSE,1))/2+ABS(DELAY(CLOSE,1)-DELAY(OPEN,1))/4:ABS(HIGH-DELAY(LOW,1))+ABS(DELAY(CLOSE,1)-DELAY(OPEN,1))/4)))*MAX(ABS(HIGH-DELAY(CLOSE,1)),ABS(LOW-DELAY(CLOSE,1)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha138">alpha_138</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_138(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((RANK(DECAYLINEAR(DELTA((((LOW*0.7)+(VWAP*0.3))),3),20))-TSRANK(DECAYLINEAR(TSRANK(CORR(TSRANK(LOW,8),TSRANK(MEAN(VOLUME,60),17),5),19),16),7))* -1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha139">alpha_139</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_139(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*CORR(OPEN,VOLUME,10))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha140">alpha_140</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_140(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式：</li>
+<li>MIN(RANK(DECAYLINEAR(((RANK(OPEN)+RANK(LOW))-(RANK(HIGH)+RANK(CLOSE))),8)),TSRANK(DECAYLINEAR(CORR(TSRANK(CLOSE,8),TSRANK(MEAN(VOLUME,60),20),8),7),3))</li>
+</ul>
+
+
+
+<h4 id="alpha141">alpha_141</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_141(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(CORR(RANK(HIGH),RANK(MEAN(VOLUME,15)),9))*-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha142">alpha_142</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_142(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(((-1*RANK(TSRANK(CLOSE,10)))*RANK(DELTA(DELTA(CLOSE,1),1)))*RANK(TSRANK((VOLUME/MEAN(VOLUME,20)),5)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha143尚未实现">alpha_143（尚未实现）</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_143(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>CLOSE&gt;DELAY(CLOSE,1)?(CLOSE-DELAY(CLOSE,1))/DELAY(CLOSE,1)*SELF:SELF</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha144">alpha_144</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_144(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUMIF(ABS(CLOSE/DELAY(CLOSE,1)-1)/AMOUNT,20,CLOSE&lt;DELAY(CLOSE,1))/COUNT(CLOSE&lt;DELAY(CLOSE,1),20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha145">alpha_145</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_145(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(MEAN(VOLUME,9)-MEAN(VOLUME,26))/MEAN(VOLUME,12)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha146">alpha_146</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_146(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>MEAN((CLOSE-DELAY(CLOSE,1))/DELAY(CLOSE,1)-SMA((CLOSE-DELAY(CLOSE,1))/DELAY(CLOSE,1),61,2),20)*(( CLOSE-DELAY(CLOSE,1))/DELAY(CLOSE,1)-SMA((CLOSE-DELAY(CLOSE,1))/DELAY(CLOSE,1),61,2))/SMA(((CLOS E-DELAY(CLOSE,1))/DELAY(CLOSE,1)-((CLOSE-DELAY(CLOSE,1))/DELAY(CLOSE,1)-SMA((CLOSE-DELAY(CLOSE,1))/DELAY(CLOSE,1),61,2)))^2,60);</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha147">alpha_147</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_147(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>REGBETA(MEAN(CLOSE,12),SEQUENCE(12))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha148">alpha_148</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_148(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((RANK(CORR((OPEN),SUM(MEAN(VOLUME,60),9),6))&lt;RANK((OPEN-TSMIN(OPEN,14))))*-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha149">alpha_149</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_149(code,benchmark=<span class="hljs-string">'000300.XSHG'</span>,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li>
+<li>benchmark:基准指数，默认为沪深300</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>REGBETA(FILTER(CLOSE/DELAY(CLOSE,1)-1,BANCHMARKINDEXCLOSE&lt;DELAY(BANCHMARKINDEXCLOSE,1)),FILTER(BANCHMARKINDEXCLOSE/DELAY(BANCHMARKINDEXCLOSE,1)-1,BANCHMARKINDEXCLOSE&lt;DELAY(BANCHMARKINDEXCLOSE,1)),252)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha150">alpha_150</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_150(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(CLOSE+HIGH+LOW)/3*VOLUME</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha151">alpha_151</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_151(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(CLOSE-DELAY(CLOSE,20),20,1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha152">alpha_152</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_152(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(MEAN(DELAY(SMA(DELAY(CLOSE/DELAY(CLOSE,9),1),9,1),1),12)-MEAN(DELAY(SMA(DELAY(CLOSE/DELAY (CLOSE,9),1),9,1),1),26),9,1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha153">alpha_153</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_153(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(MEAN(CLOSE,3)+MEAN(CLOSE,6)+MEAN(CLOSE,12)+MEAN(CLOSE,24))/4</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha154">alpha_154</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_154(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(((VWAP-MIN(VWAP,16)))&lt;(CORR(VWAP,MEAN(VOLUME,180),18)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha155">alpha_155</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_155(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(VOLUME,13,2)-SMA(VOLUME,27,2)-SMA(SMA(VOLUME,13,2)-SMA(VOLUME,27,2),10,2)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha156">alpha_156</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_156(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(MAX(RANK(DECAYLINEAR(DELTA(VWAP,5),3)),RANK(DECAYLINEAR(((DELTA(((OPEN*0.15)+(LOW*0.85)),2)/((OPEN*0.15)+(LOW*0.85)))<em>-1),3)))</em>-1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha157">alpha_157</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_157(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(MIN(PROD(RANK(RANK(LOG(SUM(TSMIN(RANK(RANK((-1*RANK(DELTA((CLOSE-1),5))))),2),1)))),1),5) +TSRANK(DELAY((-1*RET),6),5))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha158">alpha_158</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_158(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((HIGH-SMA(CLOSE,15,2))-(LOW-SMA(CLOSE,15,2)))/CLOSE</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha159">alpha_159</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_159(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((CLOSE-SUM(MIN(LOW,DELAY(CLOSE,1)),6))/SUM(MAX(HGIH,DELAY(CLOSE,1))-MIN(LOW,DELAY(CLOSE,1)),6)*12*24+(CLOSE-SUM(MIN(LOW,DELAY(CLOSE,1)),12))/SUM(MAX(HGIH,DELAY(CLOSE,1))-MIN(LOW,DELAY(CL OSE,1)),12)*6*24+(CLOSE-SUM(MIN(LOW,DELAY(CLOSE,1)),24))/SUM(MAX(HGIH,DELAY(CLOSE,1))-MIN(LOW,D ELAY(CLOSE,1)),24)*6*24)*100/(6*12+6*24+12*24)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha160">alpha_160</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_160(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA((CLOSE&lt;=DELAY(CLOSE,1)?STD(CLOSE,20):0),20,1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha161">alpha_161</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_161(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>MEAN(MAX(MAX((HIGH-LOW),ABS(DELAY(CLOSE,1)-HIGH)),ABS(DELAY(CLOSE,1)-LOW)),12)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha162">alpha_162</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_162(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(SMA(MAX(CLOSE-DELAY(CLOSE,1),0),12,1)/SMA(ABS(CLOSE-DELAY(CLOSE,1)),12,1)*100-MIN(SMA(MAX(CLOSE-DELAY(CLOSE,1),0),12,1)/SMA(ABS(CLOSE-DELAY(CLOSE,1)),12,1)*100,12))/(MAX(SMA(MAX(CLOSE-DELAY(CLOSE,1),0),12,1)/SMA(ABS(CLOSE-DELAY(CLOSE,1)),12,1)*100,12)-MIN(SMA(MAX(CLOSE-DELAY(CLOSE,1),0),12, 1)/SMA(ABS(CLOSE-DELAY(CLOSE,1)),12,1)*100,12))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha163">alpha_163</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_163(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>RANK(((((-1*RET)<em>MEAN(VOLUME,20))*VWAP)</em>(HIGH-CLOSE)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha164">alpha_164</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_164(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA((((CLOSE&gt;DELAY(CLOSE,1))?1/(CLOSE-DELAY(CLOSE,1)):1)-MIN(((CLOSE&gt;DELAY(CLOSE,1))?1/(CLOSE-D ELAY(CLOSE,1)):1),12))/(HIGH-LOW)*100,13,2)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha165尚未实现">alpha_165（尚未实现）</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_165(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>MAX(SUMAC(CLOSE-MEAN(CLOSE,48)))-MIN(SUMAC(CLOSE-MEAN(CLOSE,48)))/STD(CLOSE,48)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha166">alpha_166</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_166(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>-20*(20-1)^1.5*SUM(CLOSE/DELAY(CLOSE,1)-1-MEAN(CLOSE/DELAY(CLOSE,1)-1,20),20)/((20-1)*(20-2)(SUM((CLOSE/DELAY(CLOSE,1),20)^2,20))^1.5)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha167">alpha_167</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_167(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM((CLOSE-DELAY(CLOSE,1)&gt;0?CLOSE-DELAY(CLOSE,1):0),12</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha168">alpha_168</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_168(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(-1*VOLUME/MEAN(VOLUME,20))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha169">alpha_169</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_169(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA(MEAN(DELAY(SMA(CLOSE-DELAY(CLOSE,1),9,1),1),12)-MEAN(DELAY(SMA(CLOSE-DELAY(CLOSE,1),9,1),1), 26),10,1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha170">alpha_170</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_170(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((((RANK((1/CLOSE))<em>VOLUME)/MEAN(VOLUME,20))</em>((HIGH*RANK((HIGH-CLOSE)))/(SUM(HIGH,5)/5)))-RANK((VWAP-DELAY(VWAP,5))))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha171">alpha_171</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_171(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((-1*((LOW-CLOSE)<em>(OPEN^5)))/((CLOSE-HIGH)</em>(CLOSE^5)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha172">alpha_172</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_172(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>MEAN(ABS(SUM((LD&gt;0&amp;LD&gt;HD)?LD:0,14)*100/SUM(TR,14)-SUM((HD&gt;0&amp;HD&gt;LD)?HD:0,14)*100/SUM(TR,14))/(SUM((LD&gt;0&amp;LD&gt;HD)?LD:0,14)*100/SUM(TR,14)+SUM((HD&gt;0&amp;HD&gt;LD)?HD:0,14)*100/SUM(TR,14))*100,6)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha173">alpha_173</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_173(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>3*SMA(CLOSE,13,2)-2*SMA(SMA(CLOSE,13,2),13,2)+SMA(SMA(SMA(LOG(CLOSE),13,2),13,2),13,2);</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha174">alpha_174</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_174(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SMA((CLOSE&gt;DELAY(CLOSE,1)?STD(CLOSE,20):0),20,1)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha175">alpha_175</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_175(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>MEAN(MAX(MAX((HIGH-LOW),ABS(DELAY(CLOSE,1)-HIGH)),ABS(DELAY(CLOSE,1)-LOW)),6)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha176">alpha_176</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_176(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>CORR(RANK(((CLOSE-TSMIN(LOW,12))/(TSMAX(HIGH,12)-TSMIN(LOW,12)))),RANK(VOLUME),6)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha177">alpha_177</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_177(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((20-HIGHDAY(HIGH,20))/20)*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha178">alpha_178</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_178(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(CLOSE-DELAY(CLOSE,1))/DELAY(CLOSE,1)*VOLUME</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha179">alpha_179</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_179(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(CORR(VWAP,VOLUME,4))*RANK(CORR(RANK(LOW),RANK(MEAN(VOLUME,50)),12)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha180">alpha_180</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_180(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((MEAN(VOLUME,20)&lt;VOLUME)?((-1*TSRANK(ABS(DELTA(CLOSE,7)),60))*SIGN(DELTA(CLOSE,7)):(-1*VOLUME)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha181">alpha_181</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_181(code,benchmark=<span class="hljs-string">'000300.XSHG'</span>,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li>
+<li>benchmark:基准指数，默认为沪深300</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM(((CLOSE/DELAY(CLOSE,1)-1)-MEAN((CLOSE/DELAY(CLOSE,1)-1),20))-(BANCHMARKINDEXCLOSE-MEAN(BANCHMARKINDEXCLOSE,20))^2,20)/SUM((BANCHMARKINDEXCLOSE-MEAN(BANCHMARKINDEXCLOSE,20))^3)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha182">alpha_182</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_182(code,benchmark=<span class="hljs-string">'000300.XSHG'</span>,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li>
+<li>benchmark:基准指数，默认为沪深300</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>COUNT((CLOSE&gt;OPEN&amp;BANCHMARKINDEXCLOSE&gt;BANCHMARKINDEXOPEN)OR(CLOSE&lt;OPEN&amp;BANCHMARKINDEXCLOSE&lt;BANCHMARKINDEXOPEN),20)/20</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha183尚未实现">alpha_183（尚未实现）</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_183(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>MAX(SUMAC(CLOSE-MEAN(CLOSE,24)))-MIN(SUMAC(CLOSE-MEAN(CLOSE,24)))/STD(CLOSE,24)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha184">alpha_184</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_184(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(RANK(CORR(DELAY((OPEN-CLOSE),1),CLOSE,200))+RANK((OPEN-CLOSE)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha185">alpha_185</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_185(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>RANK((-1*((1-(OPEN/CLOSE))^2)))</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha186">alpha_186</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_186(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>(MEAN(ABS(SUM((LD&gt;0&amp;LD&gt;HD)?LD:0,14)*100/SUM(TR,14)-SUM((HD&gt;0&amp;HD&gt;LD)?HD:0,14)*100/SUM(TR,14))/(SUM((LD&gt;0&amp;LD&gt;HD)?LD:0,14)*100/SUM(TR,14)+SUM((HD&gt;0&amp;HD&gt;LD)?HD:0,14)*100/SUM(TR,14))*100,6)+DELAY(MEAN(ABS(SUM((LD&gt;0&amp;LD&gt;HD)?LD:0,14)*100/SUM(TR,14)-SUM((HD&gt;0&amp;HD&gt;LD)?HD:0,14)*100/SUM(TR,14))/(SUM((LD&gt;0&amp;LD&gt;HD)?LD:0,14)*100/SUM(TR,14)+SUM((HD&gt;0&amp;HD&gt;LD)?HD:0,14)*100/SUM(TR,14))*100,6),6))/2</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha187">alpha_187</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_187(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>SUM((OPEN&lt;=DELAY(OPEN,1)?0:MAX((HIGH-OPEN),(OPEN-DELAY(OPEN,1)))),20)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha188">alpha_188</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_188(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((HIGH-LOW–SMA(HIGH-LOW,11,2))/SMA(HIGH-LOW,11,2))*100</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha189">alpha_189</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_189(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>MEAN(ABS(CLOSE-MEAN(CLOSE,6)),6)</li></ul></li>
+</ul>
+
+
+
+<h4 id="alpha190">alpha_190</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_190(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li><p>因子公式：（公式有部分缺失 有调整）</p>
+
+<ul><li><p>原公式:</p>
+
+<ul><li>LOG((COUNT(CLOSE/DELAY(CLOSE)-1&gt;((CLOSE/DELAY(CLOSE,19))^(1/20)-1),20)-1)<em>(SUMIF(((CLOSE/DELAY(CLOSE)-1-(CLOSE/DELAY(CLOSE,19))^(1/20)-1))^2,20,CLOSE/DELAY(CLOSE)-1&lt;(CLOSE/DELAY(CLOSE,19))^(1/20)-1))/((COUNT((CLOSE/DELAY(CLOSE)-1&lt;(CLOSE/DELAY(CLOSE,19))^(1/20)-1),20))</em>(SUMIF((CLOSE/DELAY(CLOSE)-1-((CLOSE/DELAY(CLOSE,19))^(1/20)-1))^2,20,CLOSE/DELAY(CLOSE)-1&gt;(CLOSE/DELAY(CLOSE,19))^(1/20)-1))))</li></ul></li>
+<li><p>修改后公式: </p>
+
+<ul><li>LOG((COUNT(CLOSE/DELAY(CLOSE,1)-1&gt;((CLOSE/DELAY(CLOSE,19))^(1/20)-1),20)-1)<em>(SUMIF(((CLOSE/DELAY(CLOSE,1)-1-(CLOSE/DELAY(CLOSE,19))^(1/20)-1))^2,20,CLOSE/DELAY(CLOSE,1)-1&lt;(CLOSE/DELAY(CLOSE,19))^(1/20)-1))/((COUNT((CLOSE/DELAY(CLOSE,1)-1&lt;(CLOSE/DELAY(CLOSE,19))^(1/20)-1),20))</em>(SUMIF((CLOSE/DELAY(CLOSE,1)-1-((CLOSE/DELAY(CLOSE,19))^(1/20)-1))^2,20,CLOSE/DELAY(CLOSE,1)-1&gt;(CLOSE/DELAY(CLOSE,19))^(1/20)-1))))</li></ul></li></ul></li>
+</ul>
+
+<h4 id="alpha191">alpha_191</h4>
+
+
+
+<pre class="prettyprint"><code class="language-python hljs ">alpha_191(code,end_date=<span class="hljs-keyword">None</span>)</code></pre>
+
+<ul>
+<li>输入： <br>
+<ul><li>code: 股票代码列表</li>
+<li>end_date:  计算哪一天的因子 ,默认为None也就是最近一交易日的日期</li></ul></li>
+<li>输出： <br>
+<ul><li>一个 Series：index 为成分股代码，values 为对应的因子值</li></ul></li>
+<li>因子公式： <br>
+<ul><li>((CORR(MEAN(VOLUME,20),LOW,5)+((HIGH+LOW)/2))-CLOSE)</li></ul></li>
+</ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+            </div>
+            <input type="hidden" id="imagePath" value="https://image.joinquant.com"/>
+            <input type="hidden" id="cdnPath" value="https://cdn.joinquant.com"/>
+            <!--/body-->
+            
+
+
+        </div>
+                  <!-- 回到顶部 联系我们 -->
+<div id="leftsead" class="">
+  <ul></ul>
+  <input type="text" class="timeStamp" value="1772433728242" style="display:none">
+  <input type="text" class="js-cdn-path" value="https://cdn.joinquant.com" style="display:none">
+</div>
+        
+
+        <script>
+        var g_staticHost = 'https://cdn.joinquant.com';
+
+                    var isInnerEnv = false;
+        
+                var g_isMobile = false;
+        
+                var g_isLogin = false;
+        
+                var g_isWinApp= false;
+        
+        </script>
+        <script>
+          window.tokenData = {
+            name: "token",
+            value: "2138d59a5b0bf0ceea11e961400307ca6d04a0f53d26f479102ec7d1cc369a8123f8c58f2ede1010e36e11410d1df33f"
+          }
+        </script>
+
+        
+	               <script src="https://cdn.joinquant.com/common/js/mustache.min.js"></script>
+        <script src="https://cdn.joinquant.com/common/js/lib.min.js?v=1772433728242"></script>
+        <script src="https://cdn.joinquant.com/themes/jq/static/common/js/setGroIO.js?v=1772433728242"></script>
+                
+        <script src="https://cdn.joinquant.com/std/third/pdfjs-2.16.105-legacy-dist/build/pdf.js"></script>
+        <script src="https://cdn.joinquant.com/dist/static_v2/venders/common.js"></script>
+        <script src="https://cdn.joinquant.com/dist/static_v2/util.js?v=1772433728242"></script>
+        <script src="https://cdn.joinquant.com/dist/static_v2/component.js?v=1772433728242" ></script>
+        <script src="https://cdn.joinquant.com/dist/static_v2/common/common.header.module.bundle.js?v=1772433728242" ></script>
+        <script src="https://cdn.joinquant.com/dist/static_v2/global/user/login/index/index.module.bundle.js?v=1772433728242" ></script>
+        <script src="https://cdn.joinquant.com/themes/jq/dist/static_v2/global/include/include/include.module.bundle.js?v=1772433728242" ></script>
+        <!-- <script src="https://cdn.joinquant.com/themes/jq/static/dist/asset/general/baidu-tongji.bundle.js?v=1772433728242" ></script> -->
+                  <script src="https://cdn.joinquant.com/themes/jq/dist/static_v2/default/backtotop/detail/index/index.module.bundle.js?v=1772433728242" ></script>
+                
+	    
+        
+        
+        <script>
+            // 显示隐藏nav选项
+            $('.dropdown_menu').click(function(){
+                return false;
+            })
+            $('.dropdown_menu').hover(function(){
+                var href = $(this).attr('href');
+                $('.nav-dropdown-item').addClass('hidden');
+                $(href).removeClass('hidden');
+            },function(){});
+
+            $('ul.nav').find('li').find('a').hover(function(){
+                if ($(this).hasClass('dropdown_menu')) {
+                    return;
+                }
+               $('.nav-dropdown-item').addClass('hidden');
+            })
+            $('#kk_nav').mouseleave(function(){
+                $('.nav-dropdown-item').addClass('hidden');
+            })
+        </script>
+
+        <script>
+        $('.dropdown-toggle').dropdown();
+        $("body").delegate("a","click",function(){
+            if ($(this)[0].hostname.length>0 && $(this)[0].hostname != window.location.hostname) {
+                window.open($(this)[0].href);
+                return false;
+            }
+        });
+
+	</script>
+        <script src='https://cdn.bootcss.com/mathjax/2.6.0-beta.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML'></script>
+<script src='https://cdn.joinquant.com/common/js/tttag-0.0.1.js?v=1772433728242'></script>
+<script type="text/javascript" src="https://cdn.joinquant.com/third/pagedown/Markdown.Converter.js"></script>
+<script type="text/javascript" src="https://cdn.joinquant.com/third/pagedown/Markdown.Sanitizer.js"></script>
+<script type="text/javascript" src="https://cdn.joinquant.com/third/pagedown/Markdown.Editor.js"></script>
+<script type="text/javascript" src="https://cdn.joinquant.com/third/pagedown/Markdown.Editor.Hook.js"></script>
+<script type="text/javascript" src="https://cdn.joinquant.com/third/markdown/marked.min.js"></script>
+<script>
+    (function(){
+    //     function initMarkdown(){
+    //         var q = MathJax.Hub.queue;
+    //         // $('.content').each(function(index,item){
+    //         //         ///fixme
+    //         //         if(index>0){
+    //         //             return;
+    //         //         }
+    //         var content = $('.api_container').html().trim();
+    //         var html = marked(content,{breaks: true});
+    //         html = html.replace(/<br>/g,' ');
+    //         html = html.replace(/&lt;/g, '<');
+    //         html = html.replace(/&gt;/g, '>');
+    //         html = html.replace(/<em>/g, '_');
+    //         html = html.replace(/<\/em>/g, '_');
+    //         $('.api_container').html(html);
+    //         q.Push(
+    //              ["Typeset",MathJax.Hub,html]
+    //         );
+    //         // var source = $('.api_container').text();
+    //         // });
+    //         // q.Push(
+    //         //     ["MathJaxDone",this]
+    //         // );
+    //     }
+    // if ($('.api_container').attr('role')) {
+    //     initMarkdown()
+        
+    //     // html = html.replace(/<br>/g,' ');
+    //     // html = html.replace(/&lt;/g, '<');
+    //     // html = html.replace(/&gt;/g, '>');
+    //     // html = html.replace(/<>;/g, '>');
+    //     // $('.api_container').html(html);
+    //     $('.api_container').removeClass('hidden');
+    //     $(".api_container").find(":header").each(function(i,v){
+    //         if ($(v).find('span').attr('id')) {
+    //             $(v).attr('id',$(v).find('span').attr('id'));
+    //         }else{
+    //             $(v).attr('id',$(v).text());
+    //         }
+    //     });
+
+    // }
+    // initMarkdown()
+	var helpObj = {
+            init:function(){
+                this.getList();
+                this.listenerHash();
+                this.listenerScroll();
+            },
+            getList:function(){
+                var $apiContainer = $(".api_cont");
+                var $hn = $apiContainer.find(":header");
+                var listHref = [];
+                var listText = [];
+                var tagType = [];
+                //提取右侧hn标题到左侧临时数组
+                for(var i =0,len = $hn.length; i<len; i++){
+                    listHref[i] = $hn.eq(i).attr('id');
+                    listText[i] = $hn.eq(i).text();
+                    tagType[i] = $hn[i].nodeName;
+                }
+                //添加list目录
+                var listStr = '';
+                var $listContainer = $(".api_left ul");
+                for(var j = 0,listLen = listHref.length; j<listLen; j++){
+                    var tmpStr ="<a href='#" + listHref[j] + "' title='" + listText[j] + "'>" + listText[j] + "</a>";
+                    if(tagType[j] == 'H2'){
+                        listStr += "<li>"+tmpStr+"</li>";
+                    }else if(tagType[j] == 'H3'){
+                        listStr += "<li class='indent1'>"+tmpStr+"</li>";
+                    }else if(tagType[j] == 'H4'){
+                        listStr += "<li class='indent2'>"+tmpStr+"</li>";
+                    }else{} 
+                    //listStr += "<li><a href='#" + listHref[j] + "' title='" + listText[j] + "'>" + listText[j] + "</a></li>";
+                }
+                //添加list到左侧目录
+                $listContainer.html(listStr);
+            },
+            //监听hash变化
+            listenerHash:function(){
+                var $list = $(".api_left ul li");
+                var hash = window.location.hash;
+                //第一次打开url有锚点时,定位
+                if(hash != ''){
+                    $list.find('a[href="'+hash+'"]').parent().addClass('active');
+                    location.href = location.href;
+                }
+                //监听hash
+                $(window).on('hashchange',function(e){
+                    var hash = window.location.hash;
+                    for(var i = 0,len = $list.length; i<len; i++){
+                        if(hash == $list.eq(i).find('a').attr('href')){
+                            $list.eq(i).addClass('active');
+                        }else{
+                            $list.eq(i).removeClass('active');
+                        } 
+                    }
+                });
+            },
+            //监听scroll
+            listenerScroll:function(){
+                var $apiLeft = $(".api_left").eq(0);
+                var $apiRight = $(".api_right").eq(0);
+                var tmpBody = document.body;
+                //右侧滚动联动左侧
+                var $headers = $('h2,h3,h4');
+                var $list = $(".api_left ul li");
+                //h标题距离顶部距离组成的数组
+		var scrollTop=0;
+                //监听
+                window.onscroll= winScroll;
+		//监听左侧滚动与右侧不联动
+		$(".api_left").on("mouseenter",function(e){
+			window.onscroll=null;
+		})
+		$(".api_right").on("mouseenter",function(e){
+			window.onscroll=winScroll;
+        })
+        
+        $apiLeft.addClass("fixed_left");
+
+		//监听window
+		function winScroll(e){
+                    var headerTopArr = [];
+                    for(var j=0,headerLen = $headers.length;j<headerLen;j++){
+                        headerTopArr.push(parseInt($headers.eq(j).offset().top));
+                    }
+                    scrollTop = document.documentElement.scrollTop || tmpBody.scrollTop;
+                    
+                    // if(scrollTop > 52){
+                        $apiLeft.addClass("fixed_left");
+                    // }else{
+                        // $apiLeft.removeClass("fixed_left");
+                    // }
+                    //开始比较
+                    for(var k = 0,listLen = headerTopArr.length;k<listLen;k++){
+                        if(k < listLen-1){
+                            if(scrollTop >= headerTopArr[k] && scrollTop < headerTopArr[k+1]){
+                                $list.eq(k).addClass('active');
+                            }else{
+                                if(k==0 && scrollTop<headerTopArr[0]){
+                                    $list.eq(k).addClass('active');
+                                }else{
+                                    $list.eq(k).removeClass('active');
+                                }
+                            }
+                        //最后一个特殊处理
+                        }else{
+                            if(scrollTop >= headerTopArr[k]){
+                                $list.eq(k).addClass('active');
+                            }else{
+                                $list.eq(k).removeClass('active');
+                            }
+
+                        }
+                    }
+                    //右侧联动左侧当前选中项滚动
+                    var $activeList = $apiLeft.find('li.active');
+                    var a1 = $activeList[0].offsetTop;
+                    var a2 = $apiLeft.scrollTop();
+                    if(a1 - a2 > 300){
+                        $apiLeft.scrollTop(a2+300);
+                    }else if(a2-a1>20){
+                        $apiLeft.scrollTop(a2-200);
+                    }
+
+                };
+
+            }
+        }
+	//调用
+	helpObj.init();
+    })();
+</script>
+<script>
+MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+
+	            <div style="display:none">
+        <!-- 返回顶部 -->
+
+        <script>
+             var img = new Image();
+             var referer = "https%3A%2F%2Fwww.google.com%2F";
+             var euid = "0";
+             var urd = "0000_00_00";
+             var logHost = '';
+             var timestamp=new Date().getTime();
+             img.src = logHost+'/log/p.gif?euid='+euid+"&referer="+referer+'&urd='+urd+'&_t='+timestamp;
+        </script>
+        <script>
+
+          $('.js-tag-hot').on('click', function() {
+            window.setCookie('isActiveHot', 1, 365 * 10 * 24 * 60);
+          });
+
+          if ($.cookie('isActiveHot') === '1') {
+            $('.js-tag-hot div').hide();
+          };
+        </script>
+                <!-- 网易七鱼客户系统 -->
+        <script>
+            (function (w, d, n, a, j) {
+                w[n] = w[n] || function () {
+                    (w[n].a = w[n].a || []).push(arguments);
+                };
+                j = d.createElement('script');
+                j.async = true;
+                j.src = 'https://qiyukf.com/script/d65beefd7552d92ee02344b3cc6173de.js';
+                d.body.appendChild(j);
+            })(window, document, 'ysf');
+        </script>
+                </div>
+    </body>
+</html>

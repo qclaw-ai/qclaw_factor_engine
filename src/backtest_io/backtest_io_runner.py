@@ -15,6 +15,7 @@ from pathlib import Path
 from backtest_core.backtest_core_runner import run_backtest, BacktestResult
 from common.config import Config
 from common.db import get_db_manager
+from common.universe_service import normalize_universe_code
 from common.utils import setup_logger
 from factor_docs.factor_docs_parser import load_all_factors, FactorDefinition
 
@@ -121,7 +122,7 @@ def _insert_factor_backtest(session, res: BacktestResult, result_json_rel_path: 
         insert_sql,
         {
             "factor_id": res.factor_id,
-            "test_universe": res.test_universe,
+            "test_universe": normalize_universe_code(res.test_universe),
             "backtest_period": res.backtest_period,
             "horizon": res.horizon,
             "ic_value": res.ic_value,
@@ -135,62 +136,15 @@ def _insert_factor_backtest(session, res: BacktestResult, result_json_rel_path: 
         },
     )
 
-
-
-def _upsert_factor_values_path(
-    session,
-    factor_id: str,
-    factor_output_dir: str,
-    universe: str,
-) -> None:
-    """
-    在 factor_output_dir/by_universe/{UNIVERSE} 中查找以 <factor_id>_<UNIVERSE>_ 开头的 CSV 文件，
-    用找到的真实文件名写入 factor_files.factor_values_path。
-    """
-    u_tag = _safe_universe_file_tag(universe).upper()
-    root_dir = Path(factor_output_dir) / "by_universe" / u_tag
-    pattern = f"{factor_id}_{u_tag}_*.csv"
-    matches = list(root_dir.glob(pattern))
-    if not matches:
-        # 找不到就直接返回，不影响主流程
-        logger.warning(
-            "未在 %s 下找到因子 %s（universe=%s）的 CSV 文件",
-            root_dir,
-            factor_id,
-            u_tag,
-        )
-        return
-
-    # 如果有多个，按文件名排序取最新一个
-    matches.sort()
-    csv_path = matches[-1]
-
-    # 计算相对项目根目录路径
-    project_root = Path(__file__).resolve().parents[2]
-    try:
-        rel_path = csv_path.resolve().relative_to(project_root).as_posix()
-    except ValueError:
-        rel_path = csv_path.as_posix()
-
-    session.execute(
-        text(
-            """
-            INSERT INTO factor_files (factor_id, doc_path, factor_values_path)
-            VALUES (:factor_id, '', :factor_values_path)
-            ON CONFLICT (factor_id) DO UPDATE
-            SET factor_values_path = EXCLUDED.factor_values_path
-            """
-        ),
-        {"factor_id": factor_id, "factor_values_path": rel_path},
-    )
-
 def _write_backtest_json(
     base_dir: str,
     res: BacktestResult,
     meta: Dict[str, FactorDefinition],
 ) -> str:
     """将单个因子回测结果写入 JSON，返回绝对路径（按实证域分目录，避免混放）。"""
-    u_tag = _safe_universe_file_tag(res.test_universe)
+    # 与磁盘 by_universe 目录及 factor_value_files.universe 对齐（含 ALL_A -> ALL）
+    u_norm = normalize_universe_code(res.test_universe)
+    u_tag = _safe_universe_file_tag(u_norm)
     # 与 factor_values 保持一致：按域分目录（包含 ALL）
     universe_dir = os.path.join(base_dir, "by_universe", u_tag)
     os.makedirs(universe_dir, exist_ok=True)
@@ -204,7 +158,7 @@ def _write_backtest_json(
         "factor_name": fd.factor_name if fd else res.factor_id,
         "factor_type": fd.factor_type if fd else None,
         # 实证域以本次大回测为准（与 md 中适用股票池可并存）
-        "test_universe": res.test_universe,
+        "test_universe": u_norm,
         "trading_cycle": fd.trading_cycle if fd else None,
         "source_url": fd.source_url if fd else None,
         "backtest_period": res.backtest_period,
@@ -239,13 +193,6 @@ def run_backtest_io(
         fallback="backtest_results",
     )
     
-    core_cfg = Config(config_file=core_config_file)
-    factor_output_dir = core_cfg.get(
-        "backtest",
-        "factor_output_dir",
-        fallback="factor_values",
-    ).strip()
-
     factor_meta = _load_factor_meta()
     logger.info(f"已加载 {len(factor_meta)} 个因子元数据")
 
@@ -280,15 +227,8 @@ def run_backtest_io(
             _ensure_factor_basic(session, factor_meta, res.factor_id)
 
             # 3) 插入 factor_backtest
+            # 批量因子值路径以 factor_value_files 为准（因子引擎写入），不由本任务按回测域覆盖 factor_values_path。
             _insert_factor_backtest(session, res, result_json_rel_path=json_rel)
-            
-            # 4) 更新 factor_files.factor_values_path
-            _upsert_factor_values_path(
-                session=session,
-                factor_id=res.factor_id,
-                factor_output_dir=factor_output_dir,
-                universe=res.test_universe,
-            )
 
         session.commit()
         logger.info("backtest_io 全部写入 DB 成功")
