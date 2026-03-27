@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-日更线：按「因子值所属交易日 T」生成单日因子长表 CSV，并更新 factor_files.factor_values_path_daily。
+日更线：按「因子值所属交易日 T」生成单日因子长表 CSV，并更新日更路径元数据。
 
+- 主登记：factor_value_files（artifact_type=daily_csv, 含 universe 维度）。
 - 与评估线隔离：不修改 factor_values_path（月更/大回测由 backtest_io 维护）。
 - 复用 factor_engine_runner 的行情加载与公式计算、截面去极值+标准化。
 """
@@ -32,6 +33,16 @@ from factor_engine.factor_engine_runner import (
 )
 
 logger = setup_logger("daily_factor_values_runner", "logs/daily_factor_values_runner.log")
+
+
+def _normalize_universe_code(universe: str | None) -> str:
+    """与双工厂约定对齐：缺省 ALL，历史 ALL_A -> ALL。"""
+    u = (universe or "").strip().upper()
+    if not u:
+        return "ALL"
+    if u == "ALL_A":
+        return "ALL"
+    return u
 
 
 def _project_root() -> Path:
@@ -66,33 +77,61 @@ def _load_all_factor_ids_from_basic(session) -> List[str]:
     return [r[0] for r in rows]
 
 
-def _upsert_factor_values_path_daily(session, factor_id: str, rel_path_posix: str) -> None:
+def _upsert_factor_value_files_daily(
+    session,
+    *,
+    factor_id: str,
+    universe: str,
+    rel_path_posix: str,
+) -> None:
     """
-    仅更新日更路径列；新行插入时用空串占位 factor_values_path，避免 NOT NULL 冲突。
-    若你库中 factor_values_path 无默认值且 NOT NULL，请保证该列允许 '' 或调整本 SQL。
+    真分域主登记：写 factor_value_files（daily_csv）。
+    约定：同一 (factor_id, universe, artifact_type=daily_csv) 仅保留一条最新路径记录。
     """
-    session.execute(
+    updated = session.execute(
         text(
             """
-            INSERT INTO factor_files (
-                factor_id,
-                doc_path,
-                factor_values_path,
-                factor_values_path_daily
-            )
-            VALUES (
-                :factor_id,
-                '',
-                '',
-                :factor_values_path_daily
-            )
-            ON CONFLICT (factor_id) DO UPDATE
-            SET factor_values_path_daily = EXCLUDED.factor_values_path_daily
+            UPDATE factor_value_files
+            SET rel_path = :rel_path,
+                created_at = CURRENT_TIMESTAMP
+            WHERE factor_id = :factor_id
+              AND universe = :universe
+              AND artifact_type = 'daily_csv'
             """
         ),
         {
             "factor_id": factor_id,
-            "factor_values_path_daily": rel_path_posix,
+            "universe": universe,
+            "rel_path": rel_path_posix,
+        },
+    )
+
+    if int(getattr(updated, "rowcount", 0) or 0) > 0:
+        return
+
+    session.execute(
+        text(
+            """
+            INSERT INTO factor_value_files (
+                factor_id,
+                universe,
+                artifact_type,
+                rel_path,
+                created_at
+            )
+            VALUES (
+                :factor_id,
+                :universe,
+                'daily_csv',
+                :rel_path,
+                CURRENT_TIMESTAMP
+            )
+            """
+        ),
+        {
+            "factor_id": factor_id,
+            "universe": universe,
+            "rel_path": rel_path_posix,
         },
     )
 
@@ -107,11 +146,13 @@ def run_daily_factor_values(
     lookback_days: int,
     factor_ids_filter: List[str] | None,
     scope: str = "valid_only",
+    universe: str = "ALL",
 ) -> None:
     """
     :param trade_date: 因子值所属交易日 T（YYYY-MM-DD），写入 CSV 的 trade_date 列。
     :param lookback_days: 向前拉取行情的自然日天数，用于 rolling/REF 等算子。
     :param scope: valid_only=仅 is_valid；all_in_basic=factor_basic 全量 ∩ factor_docs（日更路径可覆盖未过阈因子）。
+    :param universe: 本次日更因子值所属域（ALL/HS300/...，会做 ALL_A -> ALL 归一）。
     """
     cfg = Config(config_file=config_file)
     db_manager = get_db_manager(config_file=config_file)
@@ -121,9 +162,12 @@ def run_daily_factor_values(
     start_date = start_ts.strftime("%Y-%m-%d")
     end_date = t_ts.strftime("%Y-%m-%d")
 
+    u_tag = _normalize_universe_code(universe)
+
     logger.info(
-        "日更因子值启动 trade_date=%s, 行情窗口 [%s, %s], lookback_days=%s",
+        "日更因子值启动 trade_date=%s, universe=%s, 行情窗口 [%s, %s], lookback_days=%s",
         trade_date,
+        u_tag,
         start_date,
         end_date,
         lookback_days,
@@ -191,7 +235,7 @@ def run_daily_factor_values(
         return
 
     root = _project_root()
-    out_base = root / "factor_values" / "daily"
+    out_base = root / "factor_values" / "daily" / "by_universe" / u_tag / trade_date
 
     session = db_manager.get_session()
     ok_count = 0
@@ -224,15 +268,25 @@ def run_daily_factor_values(
                 df_day = df_day[["trade_date", "stock_code", "factor_value"]]
                 df_day["trade_date"] = df_day["trade_date"].dt.strftime("%Y-%m-%d")
 
-                subdir = out_base / factor.factor_id
-                subdir.mkdir(parents=True, exist_ok=True)
-                csv_name = f"{trade_date}.csv"
-                full_path = subdir / csv_name
+                out_base.mkdir(parents=True, exist_ok=True)
+                csv_name = f"{factor.factor_id}.csv"
+                full_path = out_base / csv_name
                 df_day.to_csv(full_path, index=False)
 
                 rel = full_path.resolve().relative_to(root.resolve()).as_posix()
-                _upsert_factor_values_path_daily(session, factor.factor_id, rel)
-                logger.info("已写出 %s 并更新 factor_values_path_daily=%s", full_path, rel)
+
+                # 主登记：写真分域日更路径（artifact_type=daily_csv）。
+                _upsert_factor_value_files_daily(
+                    session,
+                    factor_id=factor.factor_id,
+                    universe=u_tag,
+                    rel_path_posix=rel,
+                )
+                logger.info(
+                    "已写出 %s，并更新 factor_value_files(daily_csv)=%s",
+                    full_path,
+                    rel,
+                )
                 ok_count += 1
 
             except Exception as e:
@@ -282,6 +336,11 @@ def main() -> None:
         default=None,
         help="valid_only=仅 is_valid（默认）；all_in_basic=factor_basic 全量∩docs，给未过阈但仍有回测 CSV 的因子写日更",
     )
+    parser.add_argument(
+        "--universe",
+        default="",
+        help="本次日更所属域（如 ALL/HS300，支持历史 ALL_A 自动归一到 ALL）",
+    )
 
     args = parser.parse_args()
 
@@ -290,10 +349,11 @@ def main() -> None:
     if lookback is None:
         lookback = cfg.getint("daily", "lookback_days", fallback=380)
 
-    scope = args.scope or cfg.get("daily", "scope", fallback="valid_only").strip()
+    scope = args.scope or cfg.get("daily", "scope", fallback="all_in_basic").strip()
     if scope not in ("valid_only", "all_in_basic"):
-        scope = "valid_only"
+        scope = "all_in_basic"
 
+    universe = args.universe.strip() or cfg.get("daily", "universe", fallback="ALL").strip()
     filt = _parse_factor_ids_csv(args.factor_ids) if args.factor_ids.strip() else None
 
     run_daily_factor_values(
@@ -302,6 +362,7 @@ def main() -> None:
         lookback_days=lookback,
         factor_ids_filter=filt,
         scope=scope,
+        universe=universe,
     )
 
 
