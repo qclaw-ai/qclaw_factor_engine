@@ -38,7 +38,7 @@ jobs:
         ssh -o IdentitiesOnly=yes server "echo 'SSH connection successful'"
 
         # 确保部署目录存在
-        ssh server "mkdir -p ${DEPLOY_DIR}"
+        ssh server "sudo mkdir -p ${DEPLOY_DIR} && sudo chown -R ${SERVER_USERNAME}:${SERVER_USERNAME} ${DEPLOY_DIR}"
 
         # 上传代码（排除 .git 等）
         rsync -avz --exclude '.git*' --exclude '.venv' --exclude '__pycache__' -e "ssh" ./ server:${DEPLOY_DIR}/
