@@ -22,17 +22,24 @@ export ENV
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') - 日内因子 pipeline 开始, T=${TRADE_DATE}" >> "${LOG_FILE}"
 
-# 1) 同步 stock_daily + Calendar 到 db_factor  
-python src/data_ingest/daily_stock_and_calendar_sync.py \
-  --trade-date "${TRADE_DATE}" \
-  --lookback-days 380 \
-  --calendar-buffer-days 10 >> "${LOG_FILE}" 2>&1
+# 1) 同步 stock_daily + Calendar 到 db_factor
+# 说明：避免使用 "\" 续行（Windows CRLF 容易引入不可见参数导致 argparse 报错）
+cmd_ingest=(
+  python src/data_ingest/daily_stock_and_calendar_sync.py
+  --trade-date "${TRADE_DATE}"
+  --lookback-days 380
+  --calendar-buffer-days 10
+)
+"${cmd_ingest[@]}" >> "${LOG_FILE}" 2>&1
 
 # 2) 跑日更因子值（ALL 域）
-python src/daily_factor_values/daily_factor_values_runner.py \
-  --trade-date "${TRADE_DATE}" \
-  --universe ALL \  
-  --scope all_in_basic >> "${LOG_FILE}" 2>&1
+cmd_daily=(
+  python src/daily_factor_values/daily_factor_values_runner.py
+  --trade-date "${TRADE_DATE}"
+  --universe ALL
+  --scope all_in_basic
+)
+"${cmd_daily[@]}" >> "${LOG_FILE}" 2>&1
 
 EXIT_CODE=$?
 

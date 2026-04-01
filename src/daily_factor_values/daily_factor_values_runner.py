@@ -62,7 +62,8 @@ def _resolve_trade_date_to_available(
     """
     t_req = pd.Timestamp(requested.strip())
     uniq = pd.unique(pd.to_datetime(avail_dates))
-    uniq.sort()
+    # 兼容 pandas 3.x：DatetimeIndex/ndarray 不再提供 .sort() 方法
+    uniq = pd.DatetimeIndex(uniq).sort_values()
     as_set = set(uniq)
 
     if t_req in as_set:
