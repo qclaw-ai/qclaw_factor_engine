@@ -1,0 +1,60 @@
+name: Deploy qclaw_factor_engine (Production)
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Deploy to Server (ubuntu + Miniconda)
+      env:
+        SERVER_HOST: ${{ secrets.SERVER_HOST }}
+        SERVER_USERNAME: ubuntu
+        SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        DEPLOY_DIR: /data/qclaw/qclaw_factor_engine
+        CONDA_ACTIVATE: /home/ubuntu/miniconda3/bin/activate
+        CONDA_ENV: base
+      run: |
+        set -x
+
+        mkdir -p ~/.ssh
+        echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+
+        echo "Host server
+          HostName $SERVER_HOST
+          User $SERVER_USERNAME
+          IdentityFile ~/.ssh/deploy_key
+          StrictHostKeyChecking no
+          UserKnownHostsFile=/dev/null
+          GlobalKnownHostsFile=/dev/null
+          LogLevel INFO" >> ~/.ssh/config
+
+        ssh -o IdentitiesOnly=yes server "echo 'SSH connection successful'"
+
+        # 确保部署目录存在
+        ssh server "mkdir -p ${DEPLOY_DIR}"
+
+        # 上传代码（排除 .git 等）
+        rsync -avz --exclude '.git*' --exclude '.venv' --exclude '__pycache__' -e "ssh" ./ server:${DEPLOY_DIR}/
+
+        # 设置脚本执行权限
+        ssh server "
+          chmod +x ${DEPLOY_DIR}/bin/run_daily_factor_pipeline.sh
+          chmod +x ${DEPLOY_DIR}/bin/run_weekly_factor_pipeline.sh
+        "
+
+        # 安装依赖（生产用 miniconda）
+        ssh server "
+          source ${CONDA_ACTIVATE} ${CONDA_ENV} &&
+          python --version &&
+          pip --version &&
+          cd ${DEPLOY_DIR} &&
+          pip install -r requirements.txt
+        "
+

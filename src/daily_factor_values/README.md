@@ -2,7 +2,8 @@
 
 ## 作用
 
-- 按 **因子值所属交易日 `T`**（`--trade-date`）计算各 `factor_basic.is_valid=TRUE` 且 `factor_docs` 有定义的因子。
+- 按 **因子值所属交易日 `T`**（`--trade-date`，**未传则默认当天** `YYYY-MM-DD`）计算各 `factor_basic.is_valid=TRUE` 且 `factor_docs` 有定义的因子。
+- **`T` 若不在已拉取的行情交易日中**（周末、节假日、或数据尚未同步到该日）：自动对齐为 **不大于 `T` 的最近交易日**；若 `T` 早于行情最早日则对齐为 **最早交易日**（日志会 WARNING/INFO）。
 - 支持按 **`--universe`** 生成分域日更（如 `ALL`、`HS300`，历史 `ALL_A` 自动归一到 `ALL`）。
 - 写出长表 CSV：`trade_date, stock_code, factor_value`。
 - 路径：`factor_values/daily/by_universe/{UNIVERSE}/{T}/{factor_id}.csv`（相对仓库根）。
@@ -12,6 +13,14 @@
 ## 运行示例
 
 在仓库根 `qclaw_factor_engine` 下：
+
+```bash
+python src/daily_factor_values/daily_factor_values_runner.py ^
+  --config src/daily_factor_values/config_dev.ini ^
+  --universe ALL
+```
+
+（省略 `--trade-date` 时使用运行当日的日期。指定某日可显式传入，例如 `--trade-date 2025-12-31`。）
 
 ```bash
 python src/daily_factor_values/daily_factor_values_runner.py ^

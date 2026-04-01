@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import List, Set
 
@@ -50,6 +51,42 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _resolve_trade_date_to_available(
+    requested: str,
+    avail_dates,
+) -> tuple[str, pd.Timestamp]:
+    """
+    若请求日不在行情交易日集合中，则自动对齐：
+    - 优先取「不大于请求日的最新交易日」；
+    - 若请求日早于全部行情，则取行情中的最早日（并打 WARNING）。
+    """
+    t_req = pd.Timestamp(requested.strip())
+    uniq = pd.unique(pd.to_datetime(avail_dates))
+    uniq.sort()
+    as_set = set(uniq)
+
+    if t_req in as_set:
+        return requested.strip(), t_req
+
+    before = uniq[uniq <= t_req]
+    if len(before) > 0:
+        resolved = pd.Timestamp(before[-1])
+        logger.warning(
+            "trade_date=%s 不在行情数据中，已自动对齐为最近可用交易日 %s",
+            requested.strip(),
+            resolved.strftime("%Y-%m-%d"),
+        )
+        return resolved.strftime("%Y-%m-%d"), resolved
+
+    earliest = pd.Timestamp(uniq[0])
+    logger.warning(
+        "trade_date=%s 早于行情最早日 %s，已自动对齐为最早可用日",
+        requested.strip(),
+        earliest.strftime("%Y-%m-%d"),
+    )
+    return earliest.strftime("%Y-%m-%d"), earliest
+
+
 def _load_valid_factor_ids_from_db(session) -> List[str]:
     """从 factor_basic 读取 is_valid = TRUE 的因子列表。"""
     sql = text(
@@ -83,6 +120,7 @@ def _upsert_factor_value_files_daily(
     factor_id: str,
     universe: str,
     rel_path_posix: str,
+    trade_date: str,
 ) -> None:
     """
     真分域主登记：写 factor_value_files（daily_csv）。
@@ -93,16 +131,21 @@ def _upsert_factor_value_files_daily(
             """
             UPDATE factor_value_files
             SET rel_path = :rel_path,
+                trade_date = :trade_date,
+                date_start = NULL,
+                date_end = NULL,
                 created_at = CURRENT_TIMESTAMP
             WHERE factor_id = :factor_id
               AND universe = :universe
               AND artifact_type = 'daily_csv'
+              AND trade_date = :trade_date
             """
         ),
         {
             "factor_id": factor_id,
             "universe": universe,
             "rel_path": rel_path_posix,
+            "trade_date": trade_date,
         },
     )
 
@@ -117,6 +160,7 @@ def _upsert_factor_value_files_daily(
                 universe,
                 artifact_type,
                 rel_path,
+                trade_date,
                 created_at
             )
             VALUES (
@@ -124,6 +168,7 @@ def _upsert_factor_value_files_daily(
                 :universe,
                 'daily_csv',
                 :rel_path,
+                :trade_date,
                 CURRENT_TIMESTAMP
             )
             """
@@ -132,6 +177,7 @@ def _upsert_factor_value_files_daily(
             "factor_id": factor_id,
             "universe": universe,
             "rel_path": rel_path_posix,
+            "trade_date": trade_date,
         },
     )
 
@@ -149,7 +195,8 @@ def run_daily_factor_values(
     universe: str = "ALL",
 ) -> None:
     """
-    :param trade_date: 因子值所属交易日 T（YYYY-MM-DD），写入 CSV 的 trade_date 列。
+    :param trade_date: 因子值所属交易日 T（YYYY-MM-DD），写入 CSV 的 trade_date 列；
+        若不在已加载的行情交易日中，会对齐为「不大于 T 的最近交易日」（早于最早日则对齐最早日）。
     :param lookback_days: 向前拉取行情的自然日天数，用于 rolling/REF 等算子。
     :param scope: valid_only=仅 is_valid；all_in_basic=factor_basic 全量 ∩ factor_docs（日更路径可覆盖未过阈因子）。
     :param universe: 本次日更因子值所属域（ALL/HS300/...，会做 ALL_A -> ALL 归一）。
@@ -157,7 +204,8 @@ def run_daily_factor_values(
     cfg = Config(config_file=config_file)
     db_manager = get_db_manager(config_file=config_file)
 
-    t_ts = pd.Timestamp(trade_date)
+    requested_trade_date = trade_date.strip()
+    t_ts = pd.Timestamp(requested_trade_date)
     start_ts = t_ts - pd.Timedelta(days=int(lookback_days))
     start_date = start_ts.strftime("%Y-%m-%d")
     end_date = t_ts.strftime("%Y-%m-%d")
@@ -165,8 +213,8 @@ def run_daily_factor_values(
     u_tag = _normalize_universe_code(universe)
 
     logger.info(
-        "日更因子值启动 trade_date=%s, universe=%s, 行情窗口 [%s, %s], lookback_days=%s",
-        trade_date,
+        "日更因子值启动 requested_trade_date=%s, universe=%s, 首次拉取行情窗口 [%s, %s], lookback_days=%s",
+        requested_trade_date,
         u_tag,
         start_date,
         end_date,
@@ -226,11 +274,27 @@ def run_daily_factor_values(
         return
 
     avail_dates = price_df.index.get_level_values("trade_date").unique()
-    if t_ts not in set(avail_dates):
-        logger.error(
-            "trade_date=%s 不在行情数据中；可用日期示例（末5个）: %s",
+    trade_date, t_ts = _resolve_trade_date_to_available(requested_trade_date, avail_dates)
+
+    # lookback 以「生效交易日」为终点，重切行情窗口（避免请求日为非交易日时锚错日历日）
+    start_ts_eff = t_ts - pd.Timedelta(days=int(lookback_days))
+    td_lvl = price_df.index.get_level_values("trade_date")
+    mask = (td_lvl >= start_ts_eff) & (td_lvl <= t_ts)
+    price_df = price_df.loc[mask]
+
+    if trade_date != requested_trade_date:
+        logger.info(
+            "日更 trade_date 生效=%s（请求=%s），行情窗口 [%s, %s] 已按生效日重算",
             trade_date,
-            sorted(avail_dates)[-5:],
+            requested_trade_date,
+            start_ts_eff.strftime("%Y-%m-%d"),
+            t_ts.strftime("%Y-%m-%d"),
+        )
+
+    if price_df.empty:
+        logger.error(
+            "对齐 trade_date=%s 后行情窗口为空；请检查 lookback_days 与 stock_daily 覆盖范围",
+            trade_date,
         )
         return
 
@@ -281,6 +345,7 @@ def run_daily_factor_values(
                     factor_id=factor.factor_id,
                     universe=u_tag,
                     rel_path_posix=rel,
+                    trade_date=trade_date,
                 )
                 logger.info(
                     "已写出 %s，并更新 factor_value_files(daily_csv)=%s",
@@ -316,8 +381,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--trade-date",
-        required=True,
-        help="因子值所属交易日 T，格式 YYYY-MM-DD（写入 CSV 的 trade_date）",
+        default="",
+        help="因子值所属交易日 T，格式 YYYY-MM-DD（写入 CSV 的 trade_date）；未填则使用当天日期",
     )
     parser.add_argument(
         "--lookback-days",
@@ -356,9 +421,13 @@ def main() -> None:
     universe = args.universe.strip() or cfg.get("daily", "universe", fallback="ALL").strip()
     filt = _parse_factor_ids_csv(args.factor_ids) if args.factor_ids.strip() else None
 
+    trade_date = args.trade_date.strip()
+    if not trade_date:
+        trade_date = datetime.now().strftime("%Y-%m-%d")
+
     run_daily_factor_values(
         config_file=args.config,
-        trade_date=args.trade_date.strip(),
+        trade_date=trade_date,
         lookback_days=lookback,
         factor_ids_filter=filt,
         scope=scope,

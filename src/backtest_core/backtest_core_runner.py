@@ -282,7 +282,7 @@ def run_backtest_for_one(
     return result
 
 
-def run_backtest(config_file: str = "backtest_core/config.ini") -> List[BacktestResult]:
+def run_backtest(config_file: str = "src/backtest_core/config.ini") -> List[BacktestResult]:
     logger.info("启动 backtest_core_runner")
 
     cfg = Config(config_file=config_file)
