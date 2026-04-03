@@ -6,6 +6,7 @@ import os
 import sys
 from collections import defaultdict
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -18,6 +19,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from common.config import Config
 from common.db import get_db_manager
+from common.factor_value_files_batch import batch_rel_path_to_abs, load_batch_csv_rel_paths
 from common.universe_service import normalize_universe_code
 from common.utils import setup_logger
 from backtest_core.backtest_core_runner import _load_factor_csv
@@ -48,12 +50,12 @@ def _load_valid_factor_ids(db_config_file: str) -> List[str]:
         session.close()
 
 
-def _find_latest_factor_csv(
+def _find_batch_csv_by_directory_scan(
     factor_output_dir: str,
     factor_id: str,
     test_universe: str,
 ) -> str | None:
-    """在目标领域目录下找到某个因子最新的 CSV 文件路径。"""
+    """兼容：在目录下按文件名 end 日期选「最新」CSV（同 end 时仅按扫描顺序，不推荐与多版本并存）。"""
     if not os.path.isdir(factor_output_dir):
         logger.warning(f"因子输出目录不存在: {factor_output_dir}")
         return None
@@ -90,28 +92,63 @@ def _find_latest_factor_csv(
 
     candidates.sort(key=lambda x: x[0])
     latest_path = candidates[-1][1]
-    logger.info(f"因子 {factor_id} 使用最新 CSV: {latest_path}")
+    logger.info(f"因子 {factor_id} 使用目录扫描选中的 CSV: {latest_path}")
     return latest_path
 
 
 def _load_factor_series_for_window(
+    config_file: str,
+    project_root: str,
     factor_output_dir: str,
     factor_ids: List[str],
     start_date: datetime,
     end_date: datetime,
     test_universe: str,
+    use_factor_value_files: bool,
 ) -> Dict[str, pd.Series]:
     """加载给定时间窗口内各因子的 factor_value 序列"""
     series_map: Dict[str, pd.Series] = {}
 
-    for fid in factor_ids:
-        csv_path = _find_latest_factor_csv(
-            factor_output_dir=factor_output_dir,
-            factor_id=fid,
-            test_universe=test_universe,
+    u_norm = normalize_universe_code(test_universe)
+    rel_map: Dict[str, str] = {}
+    if use_factor_value_files:
+        rel_map = load_batch_csv_rel_paths(
+            config_file=config_file,
+            universe=u_norm,
+            factor_ids=factor_ids,
         )
-        if not csv_path:
-            continue
+        if not rel_map:
+            logger.warning(
+                "factor_value_files 未解析到任何 batch_csv（universe=%s），将无相关性输入",
+                u_norm,
+            )
+
+    for fid in factor_ids:
+        if use_factor_value_files:
+            rel = rel_map.get(fid)
+            if not rel:
+                logger.warning(
+                    "factor_value_files 无该因子 batch_csv，跳过: factor_id=%s",
+                    fid,
+                )
+                continue
+
+            csv_path = batch_rel_path_to_abs(project_root, rel)
+            if not os.path.isfile(csv_path):
+                logger.warning(
+                    "因子 CSV 不存在（factor_value_files 指向路径无效）: factor_id=%s path=%s",
+                    fid,
+                    csv_path,
+                )
+                continue
+        else:
+            csv_path = _find_batch_csv_by_directory_scan(
+                factor_output_dir=factor_output_dir,
+                factor_id=fid,
+                test_universe=test_universe,
+            )
+            if not csv_path:
+                continue
 
         try:
             df = _load_factor_csv(csv_path)
@@ -319,6 +356,12 @@ def run_factor_corr_matrix(config_file: str = "src/factor_corr/config.ini") -> N
         fallback="factor_values/by_universe",
     ).strip()
     factor_output_dir = os.path.join(factor_output_root, test_universe)
+    use_factor_value_files = cfg.getboolean(
+        "factor_corr",
+        "use_factor_value_files",
+        fallback=True,
+    )
+    project_root = str(Path(__file__).resolve().parents[2])
 
     as_of_str = cfg.get("factor_corr", "as_of_date", fallback="")
     if as_of_str:
@@ -330,7 +373,8 @@ def run_factor_corr_matrix(config_file: str = "src/factor_corr/config.ini") -> N
     logger.info(
         f"相关性计算窗口: {start_date.date()} ~ {as_of_date.date()}, "
         f"window_days={window_days}, min_overlap_days={min_overlap_days}, "
-        f"test_universe={test_universe}, factor_output_dir={factor_output_dir}"
+        f"test_universe={test_universe}, use_factor_value_files={use_factor_value_files}, "
+        f"factor_output_dir={factor_output_dir}"
     )
 
     # 1) 加载有效因子列表
@@ -357,11 +401,14 @@ def run_factor_corr_matrix(config_file: str = "src/factor_corr/config.ini") -> N
 
     # 2) 加载时间窗口内的因子值序列
     factor_series = _load_factor_series_for_window(
+        config_file=config_file,
+        project_root=project_root,
         factor_output_dir=factor_output_dir,
         factor_ids=factor_ids,
         start_date=start_date,
         end_date=as_of_date,
         test_universe=test_universe,
+        use_factor_value_files=use_factor_value_files,
     )
     if not factor_series:
         logger.warning("窗口内未加载到任何因子序列，结束任务")

@@ -4,6 +4,7 @@
 import os
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Tuple, List, Optional
 import numpy as np
 import pandas as pd
@@ -14,6 +15,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from common.config import Config
 from common.db import get_db_manager
+from common.factor_value_files_batch import batch_rel_path_to_abs, load_batch_csv_rel_paths
+from common.universe_service import normalize_universe_code
 from common.utils import setup_logger
 
 logger = setup_logger("backtest_core_runner", "logs/backtest_core_runner.log")
@@ -292,16 +295,82 @@ def run_backtest(config_file: str = "src/backtest_core/config.ini") -> List[Back
     factor_output_dir = cfg.get("backtest", "factor_output_dir", fallback="factor_values").strip()
     factor_ids_raw = cfg.get("backtest", "factor_ids", fallback="").strip()
     test_universe = (cfg.get("backtest", "test_universe", fallback="ALL") or "ALL").strip()
+    use_factor_value_files = cfg.getboolean(
+        "backtest",
+        "use_factor_value_files",
+        fallback=True,
+    )
 
     include_factor_ids: List[str] = [
         fid.strip() for fid in factor_ids_raw.split(",") if fid.strip()
     ]
 
+    results: List[BacktestResult] = []
+
+    if use_factor_value_files:
+        # 与策略工厂一致：以 factor_value_files.batch_csv 为唯一选版来源（created_at 最新）。
+        project_root = str(Path(__file__).resolve().parents[2])
+        u_norm = normalize_universe_code(test_universe)
+        fid_filter = include_factor_ids if include_factor_ids else None
+        rel_map = load_batch_csv_rel_paths(
+            config_file=config_file,
+            universe=u_norm,
+            factor_ids=fid_filter,
+        )
+        if not rel_map:
+            logger.error(
+                "factor_value_files 中无可用 batch_csv（universe=%s），请检查登记与 factor_ids",
+                u_norm,
+            )
+            return []
+
+        if include_factor_ids:
+            for fid in include_factor_ids:
+                if fid not in rel_map:
+                    logger.warning(
+                        "factor_value_files 未找到该因子的 batch_csv：factor_id=%s",
+                        fid,
+                    )
+
+        logger.info(
+            "本次回测使用 factor_value_files（batch_csv），universe=%s，因子数=%d",
+            u_norm,
+            len(rel_map),
+        )
+
+        for factor_id in sorted(rel_map.keys()):
+            rel = rel_map[factor_id]
+            csv_path = batch_rel_path_to_abs(project_root, rel)
+            if not os.path.isfile(csv_path):
+                logger.error(
+                    "因子 CSV 不存在（factor_value_files 指向路径无效）: factor_id=%s path=%s",
+                    factor_id,
+                    csv_path,
+                )
+                continue
+
+            try:
+                res = run_backtest_for_one(
+                    config_file=config_file,
+                    factor_id=factor_id,
+                    factor_csv_path=csv_path,
+                    horizon=horizon,
+                    n_quantiles=n_quantiles,
+                    test_universe=test_universe,
+                )
+                if res is not None:
+                    results.append(res)
+            except Exception as e:
+                logger.error(f"回测因子 {factor_id} 失败: {e}")
+
+        logger.info(f"本次共完成 {len(results)} 个因子的回测")
+        return results
+
+    # 兼容：扫描目录下所有 CSV（同目录多份同名因子时可能重复回测）
     if not os.path.isdir(factor_output_dir):
         logger.error(f"因子输出目录不存在: {factor_output_dir}")
         return []
 
-    # 扫描 CSV：全域统一 by_universe（含 ALL）
     csv_files, actual_dir = _discover_csv_files(
         factor_output_dir=factor_output_dir,
         test_universe=test_universe,
@@ -311,9 +380,7 @@ def run_backtest(config_file: str = "src/backtest_core/config.ini") -> List[Back
             f"目录 {actual_dir} 下未找到任何 CSV 文件（不再回退旧扁平 factor_values）"
         )
         return []
-    logger.info(f"本次回测读取目录: {actual_dir}")
-
-    results: List[BacktestResult] = []
+    logger.info(f"本次回测读取目录（目录扫描模式）: {actual_dir}")
 
     for file_name in csv_files:
         factor_id = _extract_factor_id_from_csv_name(
