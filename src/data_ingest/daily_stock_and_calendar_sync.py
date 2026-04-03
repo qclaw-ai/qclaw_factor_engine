@@ -685,7 +685,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="同步 stock_daily + Calendar 到 db_factor（MySQL 可选，失败则回退聚宽）")
     parser.add_argument(
         "--config",
-        default="src/data_ingest/config_dev.ini",
+        default="src/data_ingest/config.ini",
         help="配置文件路径（需要 [database] + [jq]，以及可选 [mysql_source]）",
     )
     parser.add_argument(

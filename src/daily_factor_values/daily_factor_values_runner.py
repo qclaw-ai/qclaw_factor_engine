@@ -380,7 +380,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="因子工厂：日更 factor_values（单日 CSV + factor_values_path_daily）")
     parser.add_argument(
         "--config",
-        default="src/daily_factor_values/config_dev.ini",
+        default="src/daily_factor_values/config.ini",
         help="配置文件路径（需含 [database]，与 factor_engine 一致）",
     )
     parser.add_argument(
