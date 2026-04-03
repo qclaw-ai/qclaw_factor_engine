@@ -4,19 +4,20 @@
 import os
 import sys
 from datetime import datetime, date
-from typing import List
+from typing import List, Optional
 from pathlib import Path
 
 import pandas as pd
 import numpy as np
 import jqdatasdk
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 # 对齐旧项目：把 common / factor_docs 加入路径
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from common.config import Config
 from common.db import get_db_manager
+from common.stock_daily_log import log_stock_daily_banner
 from common.universe_service import normalize_universe_code, resolve_universe_for_jq
 from common.utils import setup_logger
 from factor_docs.factor_docs_parser import load_all_factors, FactorDefinition
@@ -72,6 +73,9 @@ def _filter_price_df_by_universe(
     - ALL：不筛选（保持现有全市场口径）
     - STOCK：仅保留 A 股代码后缀 .SH/.SZ
     - CUSTOM/HS300/ZZ500/INDEX/CSI/ETF/LOF/FUTURES：通过 common.universe_service 解析
+
+    说明：factor_engine 主入口已改为在 _load_stock_daily 的 SQL 侧按域过滤；本函数保留供测试或
+    与内存筛选口径对照，避免与 _load_stock_daily 分支逻辑漂移。
     """
     u = normalize_universe_code(universe)
 
@@ -185,18 +189,30 @@ def _load_stock_daily(
     config_file: str,
     start_date: str,
     end_date: str,
-    universe: str | None = None,
+    *,
+    cfg: Optional[Config] = None,
+    universe: Optional[str] = None,
 ) -> pd.DataFrame:
     """从 stock_daily 拉取行情数据，返回 DataFrame
 
     index: MultiIndex [trade_date, stock_code]
     columns: open, high, low, close, volume, turnover
+
+    - 未传 cfg / universe 或 universe=ALL：与历史行为一致，按日期整段拉全市场（供 daily_factor_values 等复用）。
+    - 非 ALL：在 SQL 侧按股票池过滤，避免先全量进内存再筛（与 _filter_price_df_by_universe 口径一致）。
     """
+    u = (
+        normalize_universe_code(universe)
+        if (universe and str(universe).strip())
+        else "ALL"
+    )
+    use_sql_filter = cfg is not None and u != "ALL"
+
     db_manager = get_db_manager(config_file=config_file)
     session = db_manager.get_session()
 
     try:
-        sql = """
+        base_select = """
         SELECT
             stock_code,
             trade_date,
@@ -209,9 +225,100 @@ def _load_stock_daily(
         FROM stock_daily
         WHERE trade_date BETWEEN :start_date AND :end_date
         """
-        params = {"start_date": start_date, "end_date": end_date}
 
-        df = pd.read_sql(text(sql), session.bind, params=params)
+        if not use_sql_filter:
+            params: dict = {"start_date": start_date, "end_date": end_date}
+            df = pd.read_sql(text(base_select), session.bind, params=params)
+            log_stock_daily_banner(
+                logger,
+                where="factor_engine._load_stock_daily",
+                mode="FULL_MARKET",
+                start_date=start_date,
+                end_date=end_date,
+                n_stocks="ALL",
+                n_batches=1,
+                n_rows=len(df),
+            )
+
+        elif u == "STOCK":
+            # 与 _filter_price_df_by_universe 中 STOCK 分支一致：仅 A 股 .SH/.SZ
+            sql = (
+                base_select
+                + " AND (stock_code LIKE '%.SH' OR stock_code LIKE '%.SZ')"
+            )
+            params = {"start_date": start_date, "end_date": end_date}
+            df = pd.read_sql(text(sql), session.bind, params=params)
+            log_stock_daily_banner(
+                logger,
+                where="factor_engine._load_stock_daily",
+                mode="SQL_STOCK_SUFFIX",
+                start_date=start_date,
+                end_date=end_date,
+                n_stocks="-",
+                n_batches=1,
+                n_rows=len(df),
+            )
+
+        elif u in ("CUSTOM", "HS300", "ZZ500", "INDEX", "CSI", "ETF", "LOF", "FUTURES"):
+            _auth_jq_if_configured(cfg, config_file=config_file)
+            internal_codes, _, _, _ = resolve_universe_for_jq(
+                cfg=cfg,
+                end_date=end_date,
+                section="factor_engine",
+            )
+            if not internal_codes:
+                logger.warning(
+                    "resolve_universe_for_jq 返回空股票池（universe=%s），stock_daily 不加载",
+                    u,
+                )
+                log_stock_daily_banner(
+                    logger,
+                    where="factor_engine._load_stock_daily",
+                    mode=f"EMPTY_POOL_{u}",
+                    start_date=start_date,
+                    end_date=end_date,
+                    n_stocks=0,
+                    n_batches=0,
+                    n_rows=0,
+                )
+                return pd.DataFrame()
+
+            # IN 列表过长时分批查询，避免单条 SQL 参数过多
+            batch_size = 800
+            frames: List[pd.DataFrame] = []
+            sql_in = text(
+                base_select + " AND stock_code IN :codes"
+            ).bindparams(bindparam("codes", expanding=True))
+
+            for i in range(0, len(internal_codes), batch_size):
+                batch = internal_codes[i : i + batch_size]
+                part = pd.read_sql(
+                    sql_in,
+                    session.bind,
+                    params={
+                        "start_date": start_date,
+                        "end_date": end_date,
+                        "codes": batch,
+                    },
+                )
+                frames.append(part)
+
+            df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+            nb = max(1, (len(internal_codes) + batch_size - 1) // batch_size)
+            log_stock_daily_banner(
+                logger,
+                where="factor_engine._load_stock_daily",
+                mode=f"IN_universe_{u}",
+                start_date=start_date,
+                end_date=end_date,
+                n_stocks=len(internal_codes),
+                n_batches=nb,
+                n_rows=len(df),
+            )
+
+        else:
+            raise ValueError(f"不支持的 factor_engine.universe（_load_stock_daily）: {u}")
+
     finally:
         session.close()
 
@@ -966,21 +1073,16 @@ def run_factor_engine(config_file: str = "src/factor_engine/config.ini") -> None
 
     logger.info(f"本次将计算 {len(factors)} 个因子")
 
-    # 拉行情数据（先拉全量，再按 universe 过滤）
-    price_df = _load_stock_daily(config_file=config_file, start_date=start_date, end_date=end_date)
-    if price_df.empty:
-        logger.error("行情数据为空，无法计算因子")
-        return
-
-    price_df = _filter_price_df_by_universe(
-        cfg=cfg,
+    # 拉行情：非 ALL 时在 SQL 侧按股票池过滤，避免全市场进内存（见 _load_stock_daily）
+    price_df = _load_stock_daily(
         config_file=config_file,
-        price_df=price_df,
-        universe=universe,
+        start_date=start_date,
         end_date=end_date,
+        cfg=cfg,
+        universe=universe,
     )
     if price_df.empty:
-        logger.error(f"领域筛选后行情为空，无法计算因子（universe={universe}）")
+        logger.error("行情数据为空，无法计算因子")
         return
 
     db_manager = get_db_manager(config_file=config_file)

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Tuple, List, Optional
 import numpy as np
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 # 把 common 模块加入路径
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -16,6 +16,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from common.config import Config
 from common.db import get_db_manager
 from common.factor_value_files_batch import batch_rel_path_to_abs, load_batch_csv_rel_paths
+from common.stock_daily_log import log_stock_daily_banner
 from common.universe_service import normalize_universe_code
 from common.utils import setup_logger
 
@@ -51,13 +52,22 @@ def _load_factor_csv(path: str) -> pd.DataFrame:
     return df
 
 
-def _load_close_series(config_file: str, start_date: str, end_date: str) -> pd.Series:
-    """从 stock_daily 加载收盘价 Series，MultiIndex 与因子一致"""
+def _load_close_series(
+    config_file: str,
+    start_date: str,
+    end_date: str,
+    stock_codes: Optional[List[str]] = None,
+) -> pd.Series:
+    """从 stock_daily 加载收盘价 Series，MultiIndex 与因子一致。
+
+    :param stock_codes: 若为 None，区间内全市场（与历史行为一致）；若为非空列表，仅拉取这些股票；
+        空列表视为错误。
+    """
     db_manager = get_db_manager(config_file=config_file)
     session = db_manager.get_session()
 
     try:
-        sql = """
+        base_sql = """
         SELECT
             stock_code,
             trade_date,
@@ -65,8 +75,58 @@ def _load_close_series(config_file: str, start_date: str, end_date: str) -> pd.S
         FROM stock_daily
         WHERE trade_date BETWEEN :start_date AND :end_date
         """
-        params = {"start_date": start_date, "end_date": end_date}
-        df = pd.read_sql(text(sql), session.bind, params=params)
+
+        if stock_codes is None:
+            params = {"start_date": start_date, "end_date": end_date}
+            df = pd.read_sql(text(base_sql), session.bind, params=params)
+            log_stock_daily_banner(
+                logger,
+                where="backtest_core._load_close_series",
+                mode="FULL_MARKET",
+                start_date=start_date,
+                end_date=end_date,
+                n_stocks="ALL",
+                n_batches=1,
+                n_rows=len(df),
+            )
+        elif len(stock_codes) == 0:
+            raise ValueError("stock_codes 为空列表，无法从 stock_daily 加载收盘价")
+        else:
+            codes = sorted({str(x).strip() for x in stock_codes if str(x).strip()})
+            if not codes:
+                raise ValueError("stock_codes 去重后为空，无法从 stock_daily 加载收盘价")
+
+            batch_size = 800
+            sql_in = text(base_sql + " AND stock_code IN :codes").bindparams(
+                bindparam("codes", expanding=True)
+            )
+            frames: List[pd.DataFrame] = []
+
+            for i in range(0, len(codes), batch_size):
+                batch = codes[i : i + batch_size]
+                part = pd.read_sql(
+                    sql_in,
+                    session.bind,
+                    params={
+                        "start_date": start_date,
+                        "end_date": end_date,
+                        "codes": batch,
+                    },
+                )
+                frames.append(part)
+
+            df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+            nb = max(1, (len(codes) + batch_size - 1) // batch_size)
+            log_stock_daily_banner(
+                logger,
+                where="backtest_core._load_close_series",
+                mode="IN_factor_csv_codes",
+                start_date=start_date,
+                end_date=end_date,
+                n_stocks=len(codes),
+                n_batches=nb,
+                n_rows=len(df),
+            )
     finally:
         session.close()
 
@@ -251,7 +311,15 @@ def run_backtest_for_one(
     end_date = factor_series.index.get_level_values("trade_date").max().strftime("%Y-%m-%d")
     backtest_period = f"{start_date} 至 {end_date}"
 
-    close_series = _load_close_series(config_file=config_file, start_date=start_date, end_date=end_date)
+    idx_codes = factor_df.index.get_level_values("stock_code")
+    factor_stock_codes = sorted({str(x).strip() for x in idx_codes.unique() if str(x).strip()})
+
+    close_series = _load_close_series(
+        config_file=config_file,
+        start_date=start_date,
+        end_date=end_date,
+        stock_codes=factor_stock_codes,
+    )
     ret_series = _compute_forward_return(close_series, horizon=horizon)
 
     ic_value, ic_ir = _compute_ic_icir(factor_series, ret_series)

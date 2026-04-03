@@ -265,10 +265,13 @@ def run_daily_factor_values(
         len(factors_to_run),
     )
 
+    # 与 factor_engine 一致：非 ALL 时在 SQL 侧按股票池过滤，减轻内存与 IO
     price_df = _load_stock_daily(
         config_file=config_file,
         start_date=start_date,
         end_date=end_date,
+        cfg=cfg,
+        universe=u_tag,
     )
     if price_df.empty:
         logger.error("stock_daily 在窗口内无数据，无法计算")
