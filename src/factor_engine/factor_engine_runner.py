@@ -93,6 +93,7 @@ def _filter_price_df_by_universe(
             cfg=cfg,
             end_date=end_date,
             section="factor_engine",
+            universe_hint=u,
         )
         code_set = set(internal_codes)
         if not code_set:
@@ -265,6 +266,7 @@ def _load_stock_daily(
                 cfg=cfg,
                 end_date=end_date,
                 section="factor_engine",
+                universe_hint=u,
             )
             if not internal_codes:
                 logger.warning(

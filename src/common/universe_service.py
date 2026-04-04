@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+import configparser
+from typing import Dict, List, Optional, Tuple
 
 import jqdatasdk
 
@@ -75,6 +76,7 @@ def resolve_universe_for_jq(
     cfg: Config,
     end_date: str,
     section: str = "data_ingest",
+    universe_hint: Optional[str] = None,
 ) -> Tuple[List[str], List[str], Dict[str, str], str]:
     """
     解析领域并返回：
@@ -89,14 +91,30 @@ def resolve_universe_for_jq(
     - INDEX / CSI / ETF / LOF / FUTURES：聚宽对应 types
     - HS300 / ZZ500：指数成分股
     - ALL：聚宽 index/csi/stock/etf/lof/futures 合并
+
+    universe_hint：
+    - 若传入非空字符串，优先按其解析领域（与调用方已归一的 universe 对齐）。
+    - 典型场景：daily_factor_values 使用 [daily].universe / CLI，而 cfg 中无 [factor_engine]，
+      若仍固定读 section=factor_engine 会得到 CUSTOM+空 stock_codes，导致空股票池。
     """
-    universe = normalize_universe_code(cfg.get(section, "universe", fallback="CUSTOM"))
+    if universe_hint is not None and str(universe_hint).strip():
+        universe = normalize_universe_code(universe_hint)
+    else:
+        try:
+            raw_u = cfg.get(section, "universe", fallback="CUSTOM")
+        except (configparser.NoSectionError, configparser.NoOptionError):
+            raw_u = "CUSTOM"
+        universe = normalize_universe_code(raw_u)
+
     internal_stock_codes: List[str] = []
     jq_codes: List[str] = []
     jq_code_to_internal: Dict[str, str] = {}
 
     if universe == "CUSTOM":
-        raw_codes = cfg.get(section, "stock_codes", fallback="").strip()
+        try:
+            raw_codes = cfg.get(section, "stock_codes", fallback="").strip()
+        except (configparser.NoSectionError, configparser.NoOptionError):
+            raw_codes = ""
         if not raw_codes:
             return [], [], {}, universe
         for code in [x.strip() for x in raw_codes.split(",") if x.strip()]:
