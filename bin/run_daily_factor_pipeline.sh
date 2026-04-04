@@ -39,7 +39,6 @@ cmd_ingest=(
 cmd_daily=(
   "${PYTHON_BIN}" src/daily_factor_values/daily_factor_values_runner.py
   --trade-date "${TRADE_DATE}"
-  --universe ALL
   --scope all_in_basic
 )
 "${cmd_daily[@]}" >> "${LOG_FILE}" 2>&1
