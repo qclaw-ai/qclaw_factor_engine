@@ -41,9 +41,32 @@ cmd_daily=(
   --trade-date "${TRADE_DATE}"
   --scope all_in_basic
 )
-"${cmd_daily[@]}" >> "${LOG_FILE}" 2>&1
+#
+# 说明：
+# - 脚本顶部 set -e 会让任意一步失败直接退出，后面拿不到 $? 做统一收口
+# - 这里显式捕获每一步退出码，保证日志/发布（rsync）行为可控
+set +e
 
+"${cmd_ingest[@]}" >> "${LOG_FILE}" 2>&1
 EXIT_CODE=$?
+
+if [ ${EXIT_CODE} -eq 0 ]; then
+  "${cmd_daily[@]}" >> "${LOG_FILE}" 2>&1
+  EXIT_CODE=$?
+fi
+
+# 3) 发布产出到目标机（rsync + ssh）
+# - 默认走你测试通过的路径；可用环境变量覆盖，便于不同机器/环境复用
+# - 仅在前序步骤成功时才推送，避免把不完整/失败产出同步出去
+RSYNC_SRC="${RSYNC_SRC:-/data/qclaw/qclaw_factor_engine/factor_values/}"
+RSYNC_DEST="${RSYNC_DEST:-ubuntu@43.136.50.206:/data/factor/}"
+
+if [ ${EXIT_CODE} -eq 0 ]; then
+  rsync -avz "${RSYNC_SRC}" "${RSYNC_DEST}" >> "${LOG_FILE}" 2>&1
+  EXIT_CODE=$?
+fi
+
+set -euo pipefail
 
 if [ ${EXIT_CODE} -eq 0 ]; then
   echo "$(date '+%Y-%m-%d %H:%M:%S') - 日内因子 pipeline 成功结束" >> "${LOG_FILE}"
