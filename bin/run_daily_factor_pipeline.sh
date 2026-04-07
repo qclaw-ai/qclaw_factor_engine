@@ -59,7 +59,7 @@ fi
 # - 默认走你测试通过的路径；可用环境变量覆盖，便于不同机器/环境复用
 # - 仅在前序步骤成功时才推送，避免把不完整/失败产出同步出去
 RSYNC_SRC="${RSYNC_SRC:-/data/qclaw/qclaw_factor_engine/factor_values/}"
-RSYNC_DEST="${RSYNC_DEST:-ubuntu@43.136.50.206:/data/factor/}"
+RSYNC_DEST="${RSYNC_DEST:-ubuntu@10.1.0.5:/data/factor/}"
 
 if [ ${EXIT_CODE} -eq 0 ]; then
   rsync -avz "${RSYNC_SRC}" "${RSYNC_DEST}" >> "${LOG_FILE}" 2>&1
