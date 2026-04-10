@@ -9,3 +9,4 @@ akshare>=1.14.0
 openai>=1.40.0
 pydantic>=2.0.0
 pypdf>=4.0.0
+lightgbm
