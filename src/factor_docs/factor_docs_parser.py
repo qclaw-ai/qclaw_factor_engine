@@ -39,16 +39,13 @@ def _extract_field(pattern: re.Pattern, text: str) -> Optional[str]:
     return match.group(1).strip()
 
 
-def parse_factor_md(path: str) -> Optional[FactorDefinition]:
-    """解析单个因子 Markdown 文档"""
-    logger.info(f"解析因子文档: {path}")
+def parse_factor_md_content(content: str, *, doc_path: str = "") -> Optional[FactorDefinition]:
+    """
+    从 Markdown 正文中解析因子定义（便于与 LLM 生成结果做闭环校验）。
 
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            content = f.read()
-    except Exception as e:
-        logger.error(f"读取文件失败 {path}: {e}")
-        return None
+    :param content: 完整 md 文本
+    :param doc_path: 仅用于日志/FactorDefinition.doc_path，可为空字符串
+    """
 
     # 支持类似「因子ID: xxx」或「因子ID：xxx」（中英文冒号）
     patterns = {
@@ -57,15 +54,18 @@ def parse_factor_md(path: str) -> Optional[FactorDefinition]:
         # 优先使用「公式(DSL)」，若不存在再退回「公式」
         "formula_dsl": re.compile(r"公式\(DSL\)[:：]\s*(.+)"),
         "formula_raw": re.compile(r"公式[:：]\s*(.+)"),
-        "description": re.compile(r"描述[:：]\s*(.+)"),
+        # 允许空描述/空链接（与 FACTOR_DEMO_001 一致）；冒号后只用水平空白，避免 \\s 吃掉 \\r\\n 误吞下一行
+        "description": re.compile(r"描述[:：][ \t]*([^\r\n]*)"),
         "factor_type": re.compile(r"因子类型[:：]\s*(.+)"),
         "test_universe": re.compile(r"(?:适用股票池|测试股票池)[:：]\s*(.+)"),
         "trading_cycle": re.compile(r"(?:调仓周期|交易周期)[:：]\s*(.+)"),
         "factor_direction": re.compile(r"(?:因子方向|方向)[:：]\s*(.+)"),
-        "source_url": re.compile(r"(?:来源URL|来源链接)[:：]\s*(.+)"),
+        "source_url": re.compile(r"(?:来源URL|来源链接)[:：][ \t]*([^\r\n]*)"),
     }
 
     raw_fields = {key: _extract_field(pat, content) for key, pat in patterns.items()}
+
+    doc_label = doc_path or "<memory>"
 
     # 公式字段：优先用 DSL，没有的话退回原始公式
     formula = raw_fields.get("formula_dsl") or raw_fields.get("formula_raw")
@@ -85,7 +85,7 @@ def parse_factor_md(path: str) -> Optional[FactorDefinition]:
     critical_keys = ["factor_id", "factor_name", "formula", "factor_direction"]
     missing_critical = [k for k in critical_keys if not fields.get(k)]
     if missing_critical:
-        logger.error(f"因子文档 {path} 缺少关键字段: {missing_critical}，跳过该文件")
+        logger.error(f"因子文档 {doc_label} 缺少关键字段: {missing_critical}，跳过该文件")
         return None
 
     # 非关键字段给默认值但打 warning
@@ -97,15 +97,16 @@ def parse_factor_md(path: str) -> Optional[FactorDefinition]:
         "source_url": "",
     }
     for key, default in defaults.items():
-        if not fields.get(key):
-            logger.warning(f"因子文档 {path} 缺少字段 {key}，使用默认值")
+        # 区分「字段行缺失」(None) 与「显式空值」(""），避免 FACTOR_DEMO 类模板误报
+        if fields.get(key) is None:
+            logger.warning(f"因子文档 {doc_label} 缺少字段 {key}，使用默认值")
             fields[key] = default
 
     # 标准化方向
     direction = fields["factor_direction"].lower()
     if direction not in ("long", "short"):
         logger.warning(
-            f"因子文档 {path} 的因子方向值为 {fields['factor_direction']}，"
+            f"因子文档 {doc_label} 的因子方向值为 {fields['factor_direction']}，"
             f"不在 (long/short) 内，按 long 处理"
         )
         direction = "long"
@@ -120,12 +121,30 @@ def parse_factor_md(path: str) -> Optional[FactorDefinition]:
         trading_cycle=fields["trading_cycle"],
         factor_direction=direction,
         source_url=fields["source_url"],
-        doc_path=os.path.abspath(path),
+        doc_path=os.path.abspath(doc_path) if doc_path else "",
     )
 
 
+def parse_factor_md(path: str) -> Optional[FactorDefinition]:
+    """解析单个因子 Markdown 文档"""
+    logger.info(f"解析因子文档: {path}")
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception as e:
+        logger.error(f"读取文件失败 {path}: {e}")
+        return None
+
+    return parse_factor_md_content(content, doc_path=path)
+
+
 def load_all_factors(config_file: str = "src/factor_docs/config.ini") -> List[FactorDefinition]:
-    """扫描 factor_docs_dir 下所有 md，解析为因子定义列表"""
+    """扫描 factor_docs_dir 下所有 md，解析为因子定义列表
+
+    默认使用本包 `config.ini`（ENV 非 prod 时为 `config_dev.ini`）中的 `[paths] factor_docs_dir`。
+    若与 `factor_md_generation` 共用同一文档根，请保持两处 ini 的 `factor_docs_dir` 一致。
+    """
     cfg = Config(config_file=config_file)
     docs_dir = cfg.get("paths", "factor_docs_dir", fallback="factor_docs/md")
 
@@ -163,4 +182,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

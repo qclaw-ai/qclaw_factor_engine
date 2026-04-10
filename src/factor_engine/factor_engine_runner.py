@@ -21,6 +21,7 @@ from common.stock_daily_log import log_stock_daily_banner
 from common.universe_service import normalize_universe_code, resolve_universe_for_jq
 from common.utils import setup_logger
 from factor_docs.factor_docs_parser import load_all_factors, FactorDefinition
+from factor_engine.factor_dsl_allowlist import assert_locals_dict_keys_match_allowlist
 
 logger = setup_logger("factor_engine_runner", "logs/factor_engine_runner.log")
 
@@ -809,12 +810,15 @@ def _sumac(series: pd.Series, window: int) -> pd.Series:
 
 
 def compute_factor_values(formula: str, price_df: pd.DataFrame) -> pd.Series:
-    """基于最小 DSL 计算因子值
+    """基于受限 eval 的因子 DSL 计算因子值
 
-    支持：
-    - 字段：open, high, low, close, volume, turnover
-    - 函数：MA(x, n), REF(x, n)
-    - 运算：+ - * /
+    允许的标识符（字段 / 函数）以 `factor_engine.factor_dsl_allowlist` 为准，
+    与下方 `locals_dict` 键集合保持一致（运行时断言）。
+
+    典型能力概览：
+    - 行情字段：open, high, low, close, volume, turnover 及 VWAP/RET 等衍生序列
+    - Alpha191 风格算子：CORR/RANK/DELTA/LOG/TS_* / IF / MIN / MAX 等（大小写别名并存）
+    - 运算：+ - * / 与括号
     """
     # 衍生字段：VWAP / RET / 市场因子 / 各类中间变量（DTM / DBM / TR / HD / LD 等）
     vwap = price_df["turnover"] / price_df["volume"]
@@ -972,6 +976,9 @@ def compute_factor_values(formula: str, price_df: pd.DataFrame) -> pd.Series:
         "banchmarkindexopen": zeros_factor,
         "sequence": lambda n, s=seq_index: s,
     }
+
+    # 与 factor_dsl_allowlist 保持单一事实来源：locals 键集必须完全一致
+    assert_locals_dict_keys_match_allowlist(locals_dict.keys())
 
     # 使用受限 eval，仅提供我们需要的局部变量
     result = eval(formula, {"__builtins__": {}}, locals_dict)  # noqa: S307

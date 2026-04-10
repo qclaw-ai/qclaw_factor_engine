@@ -6,3 +6,6 @@ redis>=5.0
 jqdatasdk>=1.9
 PyMySQL>=1.1
 akshare>=1.14.0
+openai>=1.40.0
+pydantic>=2.0.0
+pypdf>=4.0.0
