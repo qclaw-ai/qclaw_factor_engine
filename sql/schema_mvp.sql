@@ -137,6 +137,9 @@ CREATE TABLE IF NOT EXISTS factor_value_files (
     date_start    date,                        -- batch_csv 起始日
     date_end      date,                        -- batch_csv 结束日
     trade_date    date,                        -- daily_csv 交易日
+    batch_id      varchar(128),                -- 批次ID（如 inc_2026-05 / rebase_2026Q2）
+    stage         varchar(16) NOT NULL DEFAULT 'candidate', -- candidate/production/deprecated
+    is_rebase     boolean NOT NULL DEFAULT FALSE,           -- 是否重算批次（rebase）
     created_at    timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     comment       text,
     CONSTRAINT ck_factor_value_files_artifact_type
@@ -158,7 +161,9 @@ CREATE TABLE IF NOT EXISTS factor_value_files (
                 AND date_start IS NULL
                 AND date_end IS NULL
             )
-        )
+        ),
+    CONSTRAINT ck_factor_value_files_stage
+        CHECK (stage IN ('candidate', 'production', 'deprecated'))
 );
 
 ALTER TABLE factor_value_files
@@ -177,6 +182,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_factor_value_files_daily
 
 CREATE INDEX IF NOT EXISTS idx_factor_value_files_factor_universe_type
     ON factor_value_files (factor_id, universe, artifact_type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_factor_value_files_batch_stage_cov
+    ON factor_value_files (
+        factor_id,
+        universe,
+        artifact_type,
+        stage,
+        is_rebase,
+        date_start,
+        date_end,
+        created_at DESC
+    )
+    WHERE artifact_type = 'batch_csv';
 
 
 -- =========================================
