@@ -181,8 +181,8 @@ def _write_backtest_json(
 
 
 def run_backtest_io(
-    io_config_file: str = "src/backtest_io/config.ini",
-    core_config_file: str = "src/backtest_core/config.ini",
+    io_config_file: str = "config.ini",
+    core_config_file: str = "config.ini",
 ) -> None:
     logger.info("启动 backtest_io_runner")
 
@@ -240,7 +240,10 @@ def run_backtest_io(
 
 
 def main():
-    run_backtest_io()
+    run_backtest_io(
+        io_config_file="config.ini",
+        core_config_file="config.ini",
+    )
 
 
 if __name__ == "__main__":

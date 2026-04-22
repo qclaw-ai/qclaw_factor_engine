@@ -136,8 +136,8 @@ def main():
     """从聚宽一次性拉历史 A 股日线数据，写入 stock_daily 表"""
     logger.info("启动 data_ingest_stock_daily_jq_initial 脚本")
 
-    # 约定：本模块使用 src/data_ingest/config.ini（Config 内会自动切 *_dev.ini）
-    config_file = "src/data_ingest/config.ini"
+    # 约定：本模块使用仓库根 config.ini（Config 内会自动切 *_dev.ini）
+    config_file = "config.ini"
     cfg = Config(config_file=config_file)
 
     # 读取聚宽账号并登录（必须在调用任何 jqdatasdk 接口前完成）

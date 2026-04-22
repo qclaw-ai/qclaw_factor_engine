@@ -139,11 +139,10 @@ def parse_factor_md(path: str) -> Optional[FactorDefinition]:
     return parse_factor_md_content(content, doc_path=path)
 
 
-def load_all_factors(config_file: str = "src/factor_docs/config.ini") -> List[FactorDefinition]:
+def load_all_factors(config_file: str = "config.ini") -> List[FactorDefinition]:
     """扫描 factor_docs_dir 下所有 md，解析为因子定义列表
 
-    默认使用本包 `config.ini`（ENV 非 prod 时为 `config_dev.ini`）中的 `[paths] factor_docs_dir`。
-    若与 `factor_md_generation` 共用同一文档根，请保持两处 ini 的 `factor_docs_dir` 一致。
+    默认使用仓库根 `config.ini`（ENV 非 prod 时为 `config_dev.ini`）中的 `[paths] factor_docs_dir`。
     """
     cfg = Config(config_file=config_file)
     docs_dir = cfg.get("paths", "factor_docs_dir", fallback="factor_docs/md")

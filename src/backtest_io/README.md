@@ -4,7 +4,7 @@
 
 ---
 
-### 1. 配置说明：`backtest_io/config_*.ini`
+### 1. 配置说明：仓库根 `config*.ini`
 
 #### 1.1 `[database]`
 
@@ -135,7 +135,7 @@ python backtest_io/backtest_io_runner.py
 
 运行步骤：
 
-1. 读取 `backtest_io/config_*.ini` 获取 DB 和 `backtest_results_dir`；
+1. 读取仓库根 `config*.ini` 获取 DB 和 `backtest_results_dir`；
 2. 调用 `factor_docs.load_all_factors()` 预加载因子元数据；
 3. 调用 `backtest_core.run_backtest("backtest_core/config.ini")` 获取所有 `BacktestResult`；
 4. 对每个结果：

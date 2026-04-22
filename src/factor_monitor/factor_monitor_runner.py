@@ -463,12 +463,8 @@ def run_factor_monitor(config_file: str, as_of_date: str | None = None) -> dict:
     fallback_ic_mean = cfg.getfloat("monitor", "ic_mean_min_fallback", fallback=0.0)
     fallback_ic_ir = cfg.getfloat("monitor", "ic_ir_min_fallback", fallback=0.0)
 
-    docs_cfg = cfg.get("factor_docs", "config_file", fallback="src/factor_docs/config.ini")
-    factor_engine_cfg_file = cfg.get(
-        "factor_engine",
-        "config_file",
-        fallback="src/factor_engine/config.ini",
-    )
+    docs_cfg = cfg.get("factor_docs", "config_file", fallback=config_file)
+    factor_engine_cfg_file = cfg.get("factor_engine", "config_file", fallback=config_file)
 
     if not as_of_date:
         as_of_date = datetime.now().strftime("%Y-%m-%d")
@@ -723,7 +719,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="因子工厂 P1：因子月度有效性监控")
     parser.add_argument(
         "--config",
-        default="src/factor_monitor/config.ini",
+        default="config.ini",
         help="配置文件路径（非 prod 会自动切换 _dev.ini）",
     )
     parser.add_argument(

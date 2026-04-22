@@ -25,7 +25,7 @@ PYTHON_BIN="${PYTHON_BIN:-/home/ubuntu/miniconda3/bin/python}"
 SYNC_LEGACY_PATHS="${SYNC_LEGACY_PATHS:-0}"
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') - weekly factor pipeline 开始, ENV=${ENV}" >> "${LOG_FILE}"
-echo "$(date '+%Y-%m-%d %H:%M:%S') - configs: 使用各模块默认 config.ini（由 common.Config 按 ENV 自动切换 *_dev.ini）" >> "${LOG_FILE}"
+echo "$(date '+%Y-%m-%d %H:%M:%S') - configs: 使用仓库根 config.ini（由 common.Config 按 ENV 自动切换 *_dev.ini）" >> "${LOG_FILE}"
 
 # 1) 因子引擎：生成 batch_csv（factor_value_files: artifact_type=batch_csv）
 "${PYTHON_BIN}" src/factor_engine/factor_engine_runner.py >> "${LOG_FILE}" 2>&1

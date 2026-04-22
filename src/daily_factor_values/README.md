@@ -16,7 +16,7 @@
 
 ```bash
 python src/daily_factor_values/daily_factor_values_runner.py ^
-  --config src/daily_factor_values/config_dev.ini ^
+  --config config.ini ^
   --universe ALL
 ```
 
@@ -24,7 +24,7 @@ python src/daily_factor_values/daily_factor_values_runner.py ^
 
 ```bash
 python src/daily_factor_values/daily_factor_values_runner.py ^
-  --config src/daily_factor_values/config_dev.ini ^
+  --config config.ini ^
   --trade-date 2025-12-31 ^
   --universe ALL
 ```
@@ -36,7 +36,7 @@ python src/daily_factor_values/daily_factor_values_runner.py ^
 
 ```bash
 python src/daily_factor_values/daily_factor_values_runner.py ^
-  --config src/daily_factor_values/config_dev.ini ^
+  --config config.ini ^
   --trade-date 2025-12-31 ^
   --universe ALL ^
   --scope all_in_basic
@@ -50,7 +50,7 @@ python src/daily_factor_values/daily_factor_values_runner.py ^
 
 ```bash
 python src/daily_factor_values/daily_factor_values_runner.py ^
-  --config src/daily_factor_values/config_dev.ini ^
+  --config config.ini ^
   --trade-date 2025-12-31 ^
   --universe HS300 ^
   --factor-ids JQ_ALPHA_000,JQ_ALPHA_001

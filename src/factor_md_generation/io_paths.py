@@ -3,7 +3,7 @@
 """
 `factor_md_generation` 包内统一：配置文件路径、项目根、`factor_docs_dir` 解析。
 
-ini 放在包外层（`src/factor_md_generation/config*.ini`），供：
+统一读取仓库根 `config*.ini`，供：
 - `llm_md`（LLM 生成）
 - `manual_md`（表单/接口手写保存）
 - 后续 FastAPI 服务共用。
@@ -21,7 +21,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from common.config import Config
 
 # 与 `common.Config` 约定一致：非 prod 自动切到 config_dev.ini
-DEFAULT_FACTOR_MD_CONFIG_FILE = "src/factor_md_generation/config.ini"
+DEFAULT_FACTOR_MD_CONFIG_FILE = "config.ini"
 
 # 相对 `paths.factor_docs_dir` 下的子目录（LLM / 手写 分仓落盘）
 FACTOR_MD_LLM_SUBDIR = "llm"

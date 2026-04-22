@@ -332,7 +332,7 @@ def _cleanup_old_keys(
             logger.info(f"已删除过期相关性矩阵 key: {key}")
 
 
-def run_factor_corr_matrix(config_file: str = "src/factor_corr/config.ini") -> None:
+def run_factor_corr_matrix(config_file: str = "config.ini") -> None:
     """主入口：按调度周期计算相关性快照并写入 Redis。"""
     logger.info("启动 factor_corr_matrix 任务")
 
@@ -450,7 +450,9 @@ def run_factor_corr_matrix(config_file: str = "src/factor_corr/config.ini") -> N
 
 
 def main():
-    run_factor_corr_matrix()
+    run_factor_corr_matrix(
+        config_file="config.ini"
+    )
 
 
 if __name__ == "__main__":

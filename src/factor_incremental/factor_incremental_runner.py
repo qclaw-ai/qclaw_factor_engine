@@ -77,7 +77,7 @@ def _shift_trading_date(config_file: str, anchor_date: str, shift_days: int) -> 
 
 
 def run_factor_incremental(
-    config_file: str = "src/factor_incremental/config.ini",
+    config_file: str = "config.ini",
     *,
     as_of_date: Optional[str] = None,
     mode: Optional[str] = None,
@@ -94,7 +94,7 @@ def run_factor_incremental(
     factor_engine_config_file = cfg.get(
         "factor_incremental",
         "factor_engine_config_file",
-        fallback="src/factor_engine/config.ini",
+        fallback="config.ini",
     )
     fe_cfg = Config(config_file=factor_engine_config_file)
     universe = normalize_universe_code(fe_cfg.get("factor_engine", "universe", fallback="ALL"))
@@ -170,7 +170,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="因子值增量/重算编排入口")
     parser.add_argument(
         "--config",
-        default="src/factor_incremental/config.ini",
+        default="config.ini",
         help="factor_incremental 配置文件路径（非 prod 自动切换 _dev.ini）",
     )
     parser.add_argument("--as-of-date", default=None, help="批次结束日期，默认今天（YYYY-MM-DD）")

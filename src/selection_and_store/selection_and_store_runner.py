@@ -209,7 +209,7 @@ def _upsert_factor_files(
     )
 
 
-def run_selection_and_store(config_file: str = "src/selection_and_store/config.ini") -> None:
+def run_selection_and_store(config_file: str = "config.ini") -> None:
     logger.info("启动 selection_and_store_runner")
 
     cfg = Config(config_file=config_file)
@@ -335,7 +335,9 @@ def run_selection_and_store(config_file: str = "src/selection_and_store/config.i
 
 
 def main():
-    run_selection_and_store()
+    run_selection_and_store(
+        config_file="config.ini"
+    )
 
 
 if __name__ == "__main__":

@@ -63,7 +63,7 @@ def _load_llm_gateway_config() -> LLMGatewayConfig:
         raise RuntimeError(
             "LLM 网关 API Key 缺失或仍为占位符："
             "请设置环境变量 `LKEAP_API_KEY`，"
-            "或在 `src/factor_md_generation/config.ini`（ENV=prod）"
+            "或在仓库根 `config.ini`（ENV=prod）"
             " / `config_dev.ini` 的 [llm_gateway] 填写 apiKey。"
         )
 
@@ -155,7 +155,7 @@ class LlmGatewayClient:
 
         if not self.gateway_cfg.vision_model:
             raise RuntimeError(
-                "未配置 vision_model：请在 `src/factor_md_generation/config_dev.ini` 的 [llm_gateway] 中设置 vision_model，"
+                "未配置 vision_model：请在仓库根 `config_dev.ini` 的 [llm_gateway] 中设置 vision_model，"
                 "或改用文本/PDF 输入。"
             )
 

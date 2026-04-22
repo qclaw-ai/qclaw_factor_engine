@@ -4,7 +4,7 @@
 
 ---
 
-### 1. 配置说明：`factor_docs/config_dev.ini`
+### 1. 配置说明：仓库根 `config_dev.ini`
 
 ```ini
 [paths]
@@ -13,8 +13,8 @@ factor_docs_dir = ./factor_docs/md
 ```
 
 - 实际使用时，`common.Config` 会根据 `ENV` 环境变量自动选择：
-  - 非 prod：`factor_docs/config_dev.ini`
-  - prod：`factor_docs/config.ini`
+  - 非 prod：仓库根 `config_dev.ini`
+  - prod：仓库根 `config.ini`
 
 ---
 
@@ -93,7 +93,7 @@ python factor_docs/factor_docs_parser.py
 
 该脚本会：
 
-1. 读取 `factor_docs/config_*.ini` 中的 `paths.factor_docs_dir`；
+1. 读取仓库根 `config*.ini` 中的 `paths.factor_docs_dir`；
 2. 递归扫描目录下所有 `.md` 文件；
 3. 对每个文件调用 `parse_factor_md` 解析；
 4. 最终在日志中打印出解析到的所有因子概要信息。

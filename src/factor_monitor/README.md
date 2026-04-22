@@ -14,7 +14,7 @@
 ## 2. 入口与文件
 
 - 入口脚本：`src/factor_monitor/factor_monitor_runner.py`
-- 配置文件：`src/factor_monitor/config.ini`（开发环境自动用 `config_dev.ini`）
+- 配置文件：仓库根 `config.ini`（开发环境自动用 `config_dev.ini`）
 - 输出目录：`artifacts/factor_monitor/YYYY-MM/`
   - `factor_health_YYYY-MM-DD.json`
   - `factor_health_YYYY-MM-DD.md`
@@ -53,7 +53,7 @@
 示例（请在仓库根目录执行）：
 
 ```bash
-python src/factor_monitor/factor_monitor_runner.py --config src/factor_monitor/config.ini --as-of-date 2026-04-30
+python src/factor_monitor/factor_monitor_runner.py --config config.ini --as-of-date 2026-04-30
 ```
 
 参数：

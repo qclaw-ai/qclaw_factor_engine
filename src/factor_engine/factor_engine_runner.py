@@ -32,9 +32,8 @@ def _auth_jq_if_configured(cfg: Config, config_file: str) -> None:
     """
     尝试登录聚宽（仅在需要解析非 ALL/CUSTOM 域时会调用）。
 
-    为了兼容现有配置：
-    - 优先读取当前 config_file 内的 [jq]
-    - 读不到时回退到 src/data_ingest/config.ini（Config 会自动切换 *_dev.ini）
+    统一配置约定：
+    - 仅读取当前 config_file（根配置）内的 [jq]
     """
     jq_user = ""
     jq_password = ""
@@ -44,15 +43,6 @@ def _auth_jq_if_configured(cfg: Config, config_file: str) -> None:
     except Exception:
         jq_user = ""
         jq_password = ""
-
-    if not jq_user or not jq_password:
-        try:
-            ingest_cfg = Config(config_file="src/data_ingest/config.ini")
-            jq_user = (ingest_cfg.get("jq", "user", fallback="") or "").strip()
-            jq_password = (ingest_cfg.get("jq", "password", fallback="") or "").strip()
-        except Exception:
-            jq_user = ""
-            jq_password = ""
 
     if not jq_user or not jq_password:
         raise RuntimeError(
@@ -1086,7 +1076,7 @@ def winsorize_and_standardize(series: pd.Series) -> pd.Series:
 
 
 def run_factor_engine(
-    config_file: str = "src/factor_engine/config.ini",
+    config_file: str = "config.ini",
     *,
     start_date_override: Optional[str] = None,
     end_date_override: Optional[str] = None,
@@ -1259,7 +1249,7 @@ def main():
     parser = argparse.ArgumentParser(description="因子批量计算入口（通用计算，不含增量编排）")
     parser.add_argument(
         "--config",
-        default="src/factor_engine/config.ini",
+        default="config.ini",
         help="配置文件路径（非 prod 自动切换 _dev.ini）",
     )
     parser.add_argument("--start-date", default=None, help="覆盖配置中的 start_date")

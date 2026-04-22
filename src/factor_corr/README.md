@@ -117,7 +117,7 @@ password =
 模块主入口：
 
 - 文件：`src/factor_corr/factor_corr_matrix.py`
-- 函数：`run_factor_corr_matrix(config_file: str = "src/factor_corr/config.ini")`
+- 函数：`run_factor_corr_matrix(config_file: str = "config.ini")`
 
 直接运行：
 
@@ -131,8 +131,8 @@ python -m factor_corr.factor_corr_matrix
 python src/factor_corr/factor_corr_matrix.py
 ```
 
-> 注意：实际运行时请传入 `config_dev.ini` 路径，例如：
-> `run_factor_corr_matrix(config_file="src/factor_corr/config_dev.ini")`。
+> 注意：统一读取仓库根配置，开发环境可直接传：
+> `run_factor_corr_matrix(config_file="config.ini")`（会自动切到 `config_dev.ini`）。
 
 ### 4.2 与 APScheduler 集成（示意）
 
@@ -142,7 +142,7 @@ python src/factor_corr/factor_corr_matrix.py
 from factor_corr.factor_corr_matrix import run_factor_corr_matrix
 
 def job_factor_corr():
-    run_factor_corr_matrix(config_file="src/factor_corr/config_dev.ini")
+    run_factor_corr_matrix(config_file="config.ini")
 
 # APScheduler 配置略
 ```

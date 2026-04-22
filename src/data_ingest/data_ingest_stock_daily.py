@@ -80,8 +80,8 @@ def main():
     """从 AkShare 拉取 A 股日线数据并写入 stock_daily 表（小区间测试版）"""
     logger.info("启动 data_ingest_stock_daily 脚本")
 
-    # 约定：本模块使用 src/data_ingest/config.ini（Config 内会自动切到 *_dev.ini）
-    config_file = "src/data_ingest/config.ini"
+    # 约定：本模块使用仓库根 config.ini（Config 内会自动切到 *_dev.ini）
+    config_file = "config.ini"
     cfg = Config(config_file=config_file)
 
     mode = cfg.get("data_ingest", "mode", fallback="full").lower()

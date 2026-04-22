@@ -4,7 +4,7 @@
 
 ---
 
-### 1. 配置说明：`factor_engine/config_*.ini`
+### 1. 配置说明：仓库根 `config*.ini`
 
 #### 1.1 `[database]`
 
@@ -46,7 +46,7 @@ factor_ids = FACTOR_DEMO_0001
 
 入口脚本：`factor_engine_runner.py`，主要步骤：
 
-1. 读取 `factor_engine/config_*.ini`。
+1. 读取仓库根 `config.ini`（非 prod 自动切 `config_dev.ini`）。
 2. 调用 `factor_docs.load_all_factors()` 获取 `FactorDefinition` 列表，并按 `factor_ids` 过滤。
 3. 从 `stock_daily` 读取 `[start_date, end_date]` 区间内的行情数据：
    - 字段：`open, high, low, close, volume, turnover`；

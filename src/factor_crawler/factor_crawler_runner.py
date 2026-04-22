@@ -78,7 +78,7 @@ def _write_factor_md(
     return created_ids
 
 
-def run_factor_crawler(config_file: str = "src/factor_crawler/config.ini") -> None:
+def run_factor_crawler(config_file: str = "config.ini") -> None:
     logger.info("启动 factor_crawler_runner")
 
     cfg = Config(config_file=config_file)

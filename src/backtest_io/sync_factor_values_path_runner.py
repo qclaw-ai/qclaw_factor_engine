@@ -24,7 +24,7 @@ logger = setup_logger(
 
 
 def run_sync_factor_values_path_from_value_files(
-    config_file: str = "src/backtest_io/config.ini",
+    config_file: str = "config.ini",
     execution_universe: str | None = None,
 ) -> None:
     universe = normalize_universe_code(execution_universe or "ALL")
@@ -83,10 +83,10 @@ def run_sync_factor_values_path_from_value_files(
 
 
 def main() -> None:
-    cfg = Config(config_file="src/backtest_io/config.ini")
+    cfg = Config(config_file="config.ini")
     u = cfg.get("paths", "sync_factor_values_execution_universe", fallback="ALL")
     run_sync_factor_values_path_from_value_files(
-        config_file="src/backtest_io/config.ini",
+        config_file="config.ini",
         execution_universe=u,
     )
 

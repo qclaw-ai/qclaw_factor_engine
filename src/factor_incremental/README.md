@@ -10,7 +10,7 @@
 
 ## 配置文件
 
-- 默认读取：`src/factor_incremental/config.ini`（开发环境自动切 `config_dev.ini`）
+- 默认读取：仓库根 `config.ini`（开发环境自动切 `config_dev.ini`）
 - 核心项：
   - `factor_engine_config_file`
   - `mode`
@@ -20,11 +20,11 @@
 ## 运行示例
 
 ```bash
-python src/factor_incremental/factor_incremental_runner.py --config src/factor_incremental/config.ini --mode incremental --as-of-date 2026-04-30
+python src/factor_incremental/factor_incremental_runner.py --config config.ini --mode incremental --as-of-date 2026-04-30
 ```
 
 ```bash
-python src/factor_incremental/factor_incremental_runner.py --config src/factor_incremental/config.ini --mode rebase --as-of-date 2026-04-30 --batch-id rebase_2026Q2
+python src/factor_incremental/factor_incremental_runner.py --config config.ini --mode rebase --as-of-date 2026-04-30 --batch-id rebase_2026Q2
 ```
 
 ## 参数说明
