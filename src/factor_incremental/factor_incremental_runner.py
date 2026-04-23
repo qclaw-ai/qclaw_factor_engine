@@ -23,7 +23,7 @@ logger = setup_logger("factor_incremental_runner", "logs/factor_incremental_runn
 
 
 def _get_last_batch_end_date(config_file: str, universe: str) -> Optional[str]:
-    """读取指定 universe 下 batch_csv 的最大 date_end。"""
+    """读取指定 universe 下主链 stage（candidate/production）batch_csv 的最大 date_end。"""
     db_manager = get_db_manager(config_file=config_file)
     session = db_manager.get_session()
     try:
@@ -34,6 +34,7 @@ def _get_last_batch_end_date(config_file: str, universe: str) -> Optional[str]:
                 FROM factor_value_files
                 WHERE universe = :universe
                   AND artifact_type = 'batch_csv'
+                  AND stage IN ('candidate', 'production')
                 """
             ),
             {"universe": universe},
@@ -118,11 +119,20 @@ def run_factor_incremental(
         is_rebase = True
     else:
         last_end = _get_last_batch_end_date(config_file=factor_engine_config_file, universe=universe)
+        logger.info(
+            "增量起点计算: universe=%s allowed_stages=(candidate,production) last_end_date=%s",
+            universe,
+            last_end or "(空)",
+        )
         if last_end:
             run_start_date = (datetime.strptime(last_end, "%Y-%m-%d") + timedelta(days=1)).strftime(
                 "%Y-%m-%d"
             )
         else:
+            logger.warning(
+                "未找到主链 stage 的历史 batch_csv，回退 base_start_date=%s（可能为新增因子或首次建基线）",
+                base_start_date,
+            )
             run_start_date = base_start_date
         is_rebase = False
 

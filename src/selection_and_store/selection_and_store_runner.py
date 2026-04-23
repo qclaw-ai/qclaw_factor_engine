@@ -3,7 +3,7 @@
 
 import os
 import sys
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional, Sequence
 
 from decimal import InvalidOperation
 
@@ -18,14 +18,6 @@ from common.utils import setup_logger
 from factor_docs.factor_docs_parser import load_all_factors, FactorDefinition
 
 logger = setup_logger("selection_and_store_runner", "logs/selection_and_store_runner.log")
-
-
-def _safe_universe_file_tag(test_universe: str) -> str:
-    """与 backtest_io 一致，用于拼接回测 JSON 文件名。"""
-    s = (test_universe or "ALL").strip()
-    for ch in '\\/:*?"<>|':
-        s = s.replace(ch, "_")
-    return s or "ALL"
 
 
 def _load_thresholds(session, scene: str) -> Dict[str, Any]:
@@ -71,6 +63,41 @@ def _load_latest_backtests_per_universe(session) -> list[Dict[str, Any]]:
     rows = session.execute(sql).mappings().all()
     out = [dict(r) for r in rows]
     logger.info("共加载到 %d 条 (因子, 实证域) 维度的最新回测记录", len(out))
+    return out
+
+
+def _load_backtests_by_job_public_id(session, job_public_id: str) -> list[Dict[str, Any]]:
+    """仅加载指定 job 关联的回测结果，避免全局 latest 污染 selection。"""
+    sql = text(
+        """
+        SELECT
+            fb.id,
+            fb.factor_id,
+            fb.test_universe,
+            fb.backtest_period,
+            fb.horizon,
+            fb.ic_value,
+            fb.ic_ir,
+            fb.sharpe_ratio,
+            fb.max_drawdown,
+            fb.turnover,
+            fb.pass_standard,
+            fb.backtest_time,
+            fb.result_json_rel_path
+        FROM factor_pipeline_job_backtest l
+        JOIN factor_backtest fb
+          ON fb.id = l.factor_backtest_id
+        WHERE l.job_public_id = CAST(:pid AS uuid)
+        ORDER BY l.id ASC
+        """
+    )
+    rows = session.execute(sql, {"pid": str(job_public_id)}).mappings().all()
+    out = [dict(r) for r in rows]
+    logger.info(
+        "按来源 job 读取回测结果 rows=%s backtest_job_id=%s",
+        len(out),
+        job_public_id,
+    )
     return out
 
 
@@ -176,25 +203,21 @@ def _upsert_factor_files(
     session,
     factor_id: str,
     doc_path: str | None,
-    backtest_json_path: str | None,
 ) -> None:
-    """更新 factor_files 的 json 路径（若不存在则插入一条记录）"""
+    """更新 factor_files 的基础路径信息（若不存在则插入一条记录）。"""
     insert_sql = text(
         """
         INSERT INTO factor_files (
             factor_id,
             doc_path,
-            backtest_json_path,
             log_path
         ) VALUES (
             :factor_id,
             :doc_path,
-            :backtest_json_path,
             :log_path
         )
         ON CONFLICT (factor_id) DO UPDATE SET
-            doc_path = COALESCE(EXCLUDED.doc_path, factor_files.doc_path),
-            backtest_json_path = COALESCE(EXCLUDED.backtest_json_path, factor_files.backtest_json_path)
+            doc_path = COALESCE(EXCLUDED.doc_path, factor_files.doc_path)
         """
     )
 
@@ -203,28 +226,23 @@ def _upsert_factor_files(
         {
             "factor_id": factor_id,
             "doc_path": doc_path,
-            "backtest_json_path": backtest_json_path,
             "log_path": None,
         },
     )
 
 
-def run_selection_and_store(config_file: str = "config.ini") -> None:
+def run_selection_and_store(
+    config_file: str = "config.ini",
+    *,
+    factor_ids_override: Optional[Sequence[str]] = None,
+    test_universe_override: Optional[str] = None,
+    backtest_job_public_id: Optional[str] = None,
+) -> Dict[str, Any]:
     logger.info("启动 selection_and_store_runner")
 
     cfg = Config(config_file=config_file)
     scene = cfg.get("selection", "scene", fallback="A_stock_daily_single_factor")
-    primary_universe = (
-        cfg.get("selection", "primary_universe_for_file_pointer", fallback="ALL") or "ALL"
-    ).strip()
-
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    
-    backtest_results_dir = cfg.get(
-        "paths",
-        "backtest_results_dir",
-        fallback="backtest_results",
-    )
 
     # 加载因子元数据（用于 doc_path / 名称等）
     factor_meta_list = load_all_factors()
@@ -233,20 +251,50 @@ def run_selection_and_store(config_file: str = "config.ini") -> None:
 
     db_manager = get_db_manager(config_file=config_file)
     session = db_manager.get_session()
+    selected_factor_ids: Optional[List[str]] = None
+    if factor_ids_override is not None:
+        selected_factor_ids = [str(x).strip() for x in factor_ids_override if str(x).strip()]
+        selected_factor_ids = list(dict.fromkeys(selected_factor_ids))
+        if not selected_factor_ids:
+            raise RuntimeError("selection_only 收到空的 factor_ids_override")
+        logger.info(
+            "selection_only 仅处理指定因子 factor_count=%s factor_ids=%s",
+            len(selected_factor_ids),
+            selected_factor_ids,
+        )
 
     try:
         thresholds = _load_thresholds(session, scene)
-        latest_rows = _load_latest_backtests_per_universe(session)
+        if backtest_job_public_id is not None and str(backtest_job_public_id).strip():
+            latest_rows = _load_backtests_by_job_public_id(
+                session,
+                str(backtest_job_public_id).strip(),
+            )
+        else:
+            latest_rows = _load_latest_backtests_per_universe(session)
+        if selected_factor_ids is not None:
+            fid_set = set(selected_factor_ids)
+            latest_rows = [r for r in latest_rows if r.get("factor_id") in fid_set]
+        if test_universe_override is not None and str(test_universe_override).strip():
+            u = str(test_universe_override).strip()
+            latest_rows = [r for r in latest_rows if str(r.get("test_universe") or "ALL") == u]
 
-        # factor_id -> 用于 factor_files.backtest_json_path 的相对路径（优先主实证域）
-        json_pointer_by_factor: Dict[str, str] = {}
+        if not latest_rows:
+            raise RuntimeError("selection_only 未找到可判定的 factor_backtest 最新记录")
+
         touched_factors: set[str] = set()
 
+        pass_count = 0
+        fail_count = 0
         for rec in latest_rows:
             factor_id = rec["factor_id"]
             test_u = rec.get("test_universe") or "ALL"
             touched_factors.add(factor_id)
             passed = _judge_pass(rec, thresholds)
+            if passed:
+                pass_count += 1
+            else:
+                fail_count += 1
 
             logger.info(
                 "因子 %s 领域 %s 判定: %s, IC=%s, IC_IR=%s, Sharpe=%s, MaxDD=%s, Turnover=%s",
@@ -284,11 +332,6 @@ def run_selection_and_store(config_file: str = "config.ini") -> None:
                 is_valid=passed,
             )
 
-            if test_u == primary_universe:
-                rel = rec.get("result_json_rel_path")
-                if rel and os.path.isfile(os.path.join(project_root, rel.replace("/", os.sep))):
-                    json_pointer_by_factor[factor_id] = rel.replace("\\", "/")
-
         # 3) 派生 factor_basic.is_valid；4) factor_files（每个因子一次）
         for factor_id in touched_factors:
             _sync_factor_basic_is_valid(session, factor_id)
@@ -299,37 +342,26 @@ def run_selection_and_store(config_file: str = "config.ini") -> None:
             else:
                 doc_path = None
 
-            json_rel_path = json_pointer_by_factor.get(factor_id)
-            if not json_rel_path:
-                u_tag = _safe_universe_file_tag(primary_universe)
-                cand = os.path.join(
-                    project_root,
-                    backtest_results_dir,
-                    "by_universe",
-                    u_tag,
-                    f"{factor_id}_{u_tag}_backtest.json",
-                )
-                if os.path.isfile(cand):
-                    json_rel_path = os.path.relpath(cand, start=project_root).replace("\\", "/")
-            if not json_rel_path:
-                legacy = os.path.join(project_root, backtest_results_dir, f"{factor_id}_backtest.json")
-                if os.path.isfile(legacy):
-                    json_rel_path = os.path.relpath(legacy, start=project_root).replace("\\", "/")
-                else:
-                    logger.warning("未找到因子 %s 的回测 JSON（已试主域与 LEGACY 文件名）", factor_id)
-
             _upsert_factor_files(
                 session=session,
                 factor_id=factor_id,
                 doc_path=doc_path,
-                backtest_json_path=json_rel_path,
             )
 
         session.commit()
-        logger.info("selection_and_store 执行完成并已提交")
+        summary = {
+            "scene": scene,
+            "backtest_job_id": backtest_job_public_id,
+            "selected_factor_count": len(touched_factors),
+            "pass_count": pass_count,
+            "fail_count": fail_count,
+        }
+        logger.info("selection_and_store 执行完成并已提交 summary=%s", summary)
+        return summary
     except Exception as e:
         session.rollback()
         logger.error(f"selection_and_store 执行失败，已回滚: {e}")
+        raise
     finally:
         session.close()
 

@@ -6,7 +6,7 @@ import os
 import sys
 from datetime import datetime, date
 import time
-from typing import List, Optional
+from typing import List, Optional, Sequence
 from pathlib import Path
 
 import pandas as pd
@@ -1075,6 +1075,18 @@ def winsorize_and_standardize(series: pd.Series) -> pd.Series:
     return df["factor_value"]
 
 
+def _dedupe_factor_id_sequence(override: Sequence[str]) -> List[str]:
+    """P1 / worker：对显式 factor_id 列表去空白、去重且保序，供 factor_ids_override 使用。"""
+    out: List[str] = []
+    seen = set()
+    for x in override:
+        s = str(x).strip()
+        if s and s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
+
+
 def run_factor_engine(
     config_file: str = "config.ini",
     *,
@@ -1084,7 +1096,19 @@ def run_factor_engine(
     batch_id_override: Optional[str] = None,
     stage_override: Optional[str] = None,
     is_rebase_override: Optional[bool] = None,
+    # 与 [factor_engine] 中 factor_ids / universe 的显式覆写，避免为每条任务写临时 ini。
+    # - factor_ids_override 为 None：从配置文件读取（空串表示全量 ALL，保持旧语义）。
+    # - factor_ids_override 非 None：必须得到至少一个 factor_id，否则 ValueError；忽略 ini 的 factor_ids。
+    # - universe_override 为 None：从配置文件读取；非 None 则经 normalize 后使用，并忽略 ini 的 universe。
+    factor_ids_override: Optional[Sequence[str]] = None,
+    universe_override: Optional[str] = None,
 ) -> None:
+    """
+    因子主计算（含行情加载、算子、落 CSV、回写 factor_value_files）。
+
+    与 P1 / factor_pipeline_job 对接时，推荐优先传 ``factor_ids_override`` / ``universe_override``，
+    与单条 job 参数对齐；其余 [factor_engine] 与 [jq] 等仍来自 ``config_file`` 根配置。
+    """
     logger.info("启动 factor_engine_runner")
 
     cfg = Config(config_file=config_file)
@@ -1096,10 +1120,36 @@ def run_factor_engine(
         fallback=datetime.now().strftime("%Y-%m-%d"),
     )
     publish_start_date = publish_start_date_override or start_date
-    factor_ids_raw = cfg.get("factor_engine", "factor_ids", fallback="").strip()
-    universe = normalize_universe_code(
-        cfg.get("factor_engine", "universe", fallback="ALL")
-    )
+
+    if factor_ids_override is not None:
+        factor_ids = _dedupe_factor_id_sequence(factor_ids_override)
+        if not factor_ids:
+            raise ValueError(
+                "factor_ids_override 经去重后为空：请传至少一个 factor_id，"
+                "或改为 factor_ids_override=None 以使用配置文件中的 [factor_engine].factor_ids"
+            )
+        logger.info("使用参数 factor_ids_override，忽略 [factor_engine].factor_ids 原文")
+    else:
+        factor_ids_raw = cfg.get("factor_engine", "factor_ids", fallback="").strip()
+        factor_ids = [
+            fid.strip()
+            for fid in factor_ids_raw.split(",")
+            if fid.strip()
+        ]
+
+    if universe_override is not None:
+        u0 = str(universe_override).strip()
+        if not u0:
+            raise ValueError(
+                "universe_override 只含空白不合法；请传 None 使用 [factor_engine].universe 或传有效域代码"
+            )
+        universe = normalize_universe_code(u0)
+        logger.info("使用参数 universe_override，忽略 [factor_engine].universe 原文")
+    else:
+        universe = normalize_universe_code(
+            cfg.get("factor_engine", "universe", fallback="ALL")
+        )
+
     batch_id = (batch_id_override or cfg.get("factor_engine", "batch_id", fallback="")).strip()
     stage = (
         (stage_override or cfg.get("factor_engine", "stage", fallback="candidate") or "candidate")
@@ -1108,11 +1158,6 @@ def run_factor_engine(
     )
     is_rebase_cfg = bool(cfg.getboolean("factor_engine", "is_rebase", fallback=False))
     is_rebase = is_rebase_override if is_rebase_override is not None else is_rebase_cfg
-    factor_ids: List[str] = [
-        fid.strip()
-        for fid in factor_ids_raw.split(",")
-        if fid.strip()
-    ]
 
     if not batch_id:
         # 默认批次号：inc_YYYYMMDD；重算模式则前缀 rebase_。
@@ -1271,6 +1316,16 @@ def main():
         action="store_true",
         help="覆盖配置并标记本批次非 rebase",
     )
+    parser.add_argument(
+        "--factor-ids",
+        default=None,
+        help="显式覆写 [factor_engine].factor_ids，逗号分隔，与 run_factor_engine(factor_ids_override=...) 一致；不传则读配置",
+    )
+    parser.add_argument(
+        "--universe",
+        default=None,
+        help="显式覆写 [factor_engine].universe（如 ALL/HS300），与 run_factor_engine(universe_override=...) 一致；不传则读配置",
+    )
     args = parser.parse_args()
 
     is_rebase_override: Optional[bool] = None
@@ -1281,6 +1336,19 @@ def main():
     elif args.no_rebase:
         is_rebase_override = False
 
+    factor_ids_arg: Optional[List[str]] = None
+    if args.factor_ids is not None:
+        factor_ids_arg = [x.strip() for x in args.factor_ids.split(",") if x.strip()]
+        if not factor_ids_arg:
+            raise SystemExit("错误：--factor-ids 去空白后为空，请至少给出一个 factor_id，或不要传此参数以使用配置文件")
+
+    universe_arg: Optional[str] = None
+    if args.universe is not None:
+        s = str(args.universe).strip()
+        if not s:
+            raise SystemExit("错误：--universe 不能为全空白，或不要传此参数以使用配置文件")
+        universe_arg = s
+
     run_factor_engine(
         config_file=args.config,
         start_date_override=args.start_date,
@@ -1289,6 +1357,8 @@ def main():
         batch_id_override=args.batch_id,
         stage_override=args.stage,
         is_rebase_override=is_rebase_override,
+        factor_ids_override=factor_ids_arg,
+        universe_override=universe_arg,
     )
 
 

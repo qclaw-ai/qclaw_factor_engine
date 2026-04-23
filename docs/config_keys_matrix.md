@@ -62,8 +62,8 @@
 |---|---|---|
 | `factor_engine.start_date` | `src/factor_engine/factor_engine_runner.py` -> `run_factor_engine()` | 因子计算起始日期 |
 | `factor_engine.end_date` | `src/factor_engine/factor_engine_runner.py` -> `run_factor_engine()` | 因子计算结束日期 |
-| `factor_engine.factor_ids` | `src/factor_engine/factor_engine_runner.py` -> `run_factor_engine()` | 指定因子集合 |
-| `factor_engine.universe` | `src/factor_engine/factor_engine_runner.py` -> `run_factor_engine()` | 因子计算域 |
+| `factor_engine.factor_ids` | `src/factor_engine/factor_engine_runner.py` -> `run_factor_engine()` | 指定因子集合；若调用时传入 `factor_ids_override` 或命令行 `--factor-ids` 则**以参数为准，忽略本项** |
+| `factor_engine.universe` | `src/factor_engine/factor_engine_runner.py` -> `run_factor_engine()` | 因子计算域；若 `universe_override` 或 `--universe` 则**以参数为准，忽略本项** |
 | `factor_engine.batch_id` | `src/factor_engine/factor_engine_runner.py` -> `run_factor_engine()` | 批次号 |
 | `factor_engine.skip_factor_ids` | `src/factor_engine/factor_engine_runner.py` -> `run_factor_engine()` | 跳过因子集合 |
 | `factor_engine.config_file` | `src/factor_monitor/factor_monitor_runner.py` -> `run_factor_monitor()` | 月监中行情加载复用的配置文件路径（默认当前 config） |
@@ -89,8 +89,8 @@
 | `backtest.n_quantiles` | `src/backtest_core/backtest_core_runner.py` -> `run_backtest()` | 分组数 |
 | `backtest.factor_output_dir` | `src/backtest_core/backtest_core_runner.py` -> `run_backtest()` | 因子 CSV 根目录 |
 | `backtest.use_factor_value_files` | `src/backtest_core/backtest_core_runner.py` -> `run_backtest()` | 是否按 `factor_value_files` 选路径 |
-| `backtest.factor_ids` | `src/backtest_core/backtest_core_runner.py` -> `run_backtest()` | 回测因子过滤 |
-| `backtest.test_universe` | `src/backtest_core/backtest_core_runner.py` -> `run_backtest()` | 回测实证域 |
+| `backtest.factor_ids` | `src/backtest_core/backtest_core_runner.py` -> `run_backtest()` | 回测因子过滤；若 `factor_ids_override` 或 CLI `--factor-ids` 则**以参数为准，忽略本项** |
+| `backtest.test_universe` | `src/backtest_core/backtest_core_runner.py` -> `run_backtest()` | 回测实证域；若 `test_universe_override` 或 `--test-universe` 则**以参数为准，忽略本项**（参数会经 `normalize_universe_code`） |
 
 ---
 

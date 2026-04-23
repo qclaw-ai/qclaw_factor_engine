@@ -5,7 +5,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Sequence
 import numpy as np
 import pandas as pd
 from sqlalchemy import bindparam, text
@@ -353,7 +353,28 @@ def run_backtest_for_one(
     return result
 
 
-def run_backtest(config_file: str = "config.ini") -> List[BacktestResult]:
+def _dedupe_backtest_factor_ids(override: Sequence[str]) -> List[str]:
+    """P1 / worker：与 factor_engine 一致，对显式 factor_id 列表去空白、去重保序。"""
+    out: List[str] = []
+    seen = set()
+    for x in override:
+        s = str(x).strip()
+        if s and s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
+
+
+def run_backtest(
+    config_file: str = "config.ini",
+    *,
+    factor_ids_override: Optional[Sequence[str]] = None,
+    test_universe_override: Optional[str] = None,
+) -> List[BacktestResult]:
+    """
+    批量回测。``factor_ids_override`` / ``test_universe_override`` 与 ``[backtest]`` 中
+    ``factor_ids`` / ``test_universe`` 的关系：非 None 时**以参数为准**（P1 与 factor_pipeline_job 对齐）。
+    """
     logger.info("启动 backtest_core_runner")
 
     cfg = Config(config_file=config_file)
@@ -361,17 +382,36 @@ def run_backtest(config_file: str = "config.ini") -> List[BacktestResult]:
     horizon = cfg.getint("backtest", "horizon", fallback=5)
     n_quantiles = cfg.getint("backtest", "n_quantiles", fallback=10)
     factor_output_dir = cfg.get("backtest", "factor_output_dir", fallback="factor_values").strip()
-    factor_ids_raw = cfg.get("backtest", "factor_ids", fallback="").strip()
-    test_universe = (cfg.get("backtest", "test_universe", fallback="ALL") or "ALL").strip()
     use_factor_value_files = cfg.getboolean(
         "backtest",
         "use_factor_value_files",
         fallback=True,
     )
 
-    include_factor_ids: List[str] = [
-        fid.strip() for fid in factor_ids_raw.split(",") if fid.strip()
-    ]
+    if factor_ids_override is not None:
+        include_factor_ids: List[str] = _dedupe_backtest_factor_ids(factor_ids_override)
+        if not include_factor_ids:
+            raise ValueError(
+                "factor_ids_override 经去重后为空：请传至少一个 factor_id，"
+                "或改为 factor_ids_override=None 以使用 [backtest].factor_ids"
+            )
+        logger.info("使用参数 factor_ids_override，忽略 [backtest].factor_ids 原文")
+    else:
+        factor_ids_raw = cfg.get("backtest", "factor_ids", fallback="").strip()
+        include_factor_ids = [
+            fid.strip() for fid in factor_ids_raw.split(",") if fid.strip()
+        ]
+
+    if test_universe_override is not None:
+        u0 = str(test_universe_override).strip()
+        if not u0:
+            raise ValueError(
+                "test_universe_override 只含空白不合法；请传 None 使用 [backtest].test_universe 或传有效域代码"
+            )
+        test_universe = normalize_universe_code(u0)
+        logger.info("使用参数 test_universe_override，忽略 [backtest].test_universe 原文")
+    else:
+        test_universe = (cfg.get("backtest", "test_universe", fallback="ALL") or "ALL").strip()
 
     results: List[BacktestResult] = []
 
@@ -480,9 +520,44 @@ def run_backtest(config_file: str = "config.ini") -> List[BacktestResult]:
     return results
 
 
-def main():
+def main() -> None:
+    import argparse
+
+    p = argparse.ArgumentParser(description="回测核心：读因子 CSV 与行情，算 IC/换手等")
+    p.add_argument(
+        "--config",
+        default="config.ini",
+        help="根配置文件（非 prod 时自动用 *_dev.ini）",
+    )
+    p.add_argument(
+        "--factor-ids",
+        default=None,
+        help="覆写 [backtest].factor_ids，逗号分隔；不传则读配置",
+    )
+    p.add_argument(
+        "--test-universe",
+        default=None,
+        help="覆写 [backtest].test_universe；不传则读配置",
+    )
+    args = p.parse_args()
+
+    f_override: Optional[List[str]] = None
+    if args.factor_ids is not None:
+        f_override = [x.strip() for x in args.factor_ids.split(",") if x.strip()]
+        if not f_override:
+            raise SystemExit("错误：--factor-ids 去空白后为空，或不要传此参数以使用配置文件")
+
+    u_override: Optional[str] = None
+    if args.test_universe is not None:
+        s = str(args.test_universe).strip()
+        if not s:
+            raise SystemExit("错误：--test-universe 不能为全空白，或不要传此参数以使用配置文件")
+        u_override = s
+
     run_backtest(
-        config_file="config.ini"
+        config_file=args.config,
+        factor_ids_override=f_override,
+        test_universe_override=u_override,
     )
 
 

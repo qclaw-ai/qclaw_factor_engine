@@ -112,8 +112,7 @@ ALTER TABLE factor_universe_status
 
 CREATE TABLE IF NOT EXISTS factor_files (
     factor_id           varchar(128) PRIMARY KEY,    -- 因子ID，对应 factor_basic.factor_id
-    doc_path            varchar(1024) NOT NULL,      -- 因子 md 文件路径
-    backtest_json_path  varchar(1024),               -- 最新一次回测 JSON 路径
+    doc_path            varchar(1024),               -- 因子 md 文件路径
     log_path            varchar(1024)                -- 回测日志路径
 );
 
