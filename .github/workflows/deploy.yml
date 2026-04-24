@@ -11,35 +11,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        server:
-          # 第一台服务器：沿用原有 secrets 命名
-          - name: server1
-            host: ${{ secrets.SERVER_HOST }}
-            username: ubuntu
-            ssh_key: ${{ secrets.SERVER_SSH_KEY }}
-            deploy_dir: /data/qclaw/qclaw_factor_engine
-            conda_activate: /home/ubuntu/miniconda3/bin/activate
-            conda_env: base
-          # 第二台服务器：新增带序号的 secrets
-          - name: server2
-            host: ${{ secrets.SERVER_HOST_2 }}
-            username: ubuntu
-            ssh_key: ${{ secrets.SERVER_SSH_KEY_2 }}
-            deploy_dir: /data/qclaw/qclaw_factor_engine
-            conda_activate: /home/ubuntu/miniconda3/bin/activate
-            conda_env: base
+        server_no: [1, 2]
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Deploy to ${{ matrix.server.name }} (ubuntu + Miniconda)
+    - name: Deploy to server${{ matrix.server_no }} (ubuntu + Miniconda)
       env:
-        SERVER_HOST: ${{ matrix.server.host }}
-        SERVER_USERNAME: ${{ matrix.server.username }}
-        SSH_PRIVATE_KEY: ${{ matrix.server.ssh_key }}
-        DEPLOY_DIR: ${{ matrix.server.deploy_dir }}
-        CONDA_ACTIVATE: ${{ matrix.server.conda_activate }}
-        CONDA_ENV: ${{ matrix.server.conda_env }}
+        # 不能在 matrix 中直接引用 secrets，这里按 server_no 分支取值
+        SERVER_HOST: ${{ matrix.server_no == 1 && secrets.SERVER_HOST || secrets.SERVER_HOST_2 }}
+        SSH_PRIVATE_KEY: ${{ matrix.server_no == 1 && secrets.SERVER_SSH_KEY || secrets.SERVER_SSH_KEY_2 }}
+        SERVER_USERNAME: ubuntu
+        DEPLOY_DIR: /data/qclaw/qclaw_factor_engine
+        CONDA_ACTIVATE: /home/ubuntu/miniconda3/bin/activate
+        CONDA_ENV: base
       run: |
         set -x
 
