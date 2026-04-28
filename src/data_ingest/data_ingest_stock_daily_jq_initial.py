@@ -118,6 +118,13 @@ def _resolve_universe(cfg: Config, end_date: str) -> List[str]:
         logger.info(f"HS300 成分数量: {len(codes)}")
         return codes
 
+    if universe == "ZZ500":
+        logger.info(f"拉取 ZZ500 成分股，date={end_date}")
+        jq_codes = jqdatasdk.get_index_stocks("000905.XSHG", date=end_date)
+        codes = jq_codes
+        logger.info(f"ZZ500 成分数量: {len(codes)}")
+        return codes
+
 
     if universe == "ALL":
         logger.info(f"根据聚宽 get_all_securities 拉取全市场合约列表，date={end_date}")
