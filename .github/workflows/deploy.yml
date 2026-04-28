@@ -54,6 +54,20 @@ jobs:
           chmod +x ${DEPLOY_DIR}/bin/run_daily_factor_pipeline.sh
           chmod +x ${DEPLOY_DIR}/bin/run_weekly_factor_pipeline.sh
           chmod +x ${DEPLOY_DIR}/bin/run_pipeline_job_worker_once.sh
+          chmod +x ${DEPLOY_DIR}/bin/run_cos_sync_factor_export_parquet.sh
+          chmod +x ${DEPLOY_DIR}/bin/run_cos_upload_daily.sh
+          chmod +x ${DEPLOY_DIR}/bin/run_cos_upload_full.sh
+          chmod +x ${DEPLOY_DIR}/bin/run_daily_full_pipeline.sh
+          chmod +x ${DEPLOY_DIR}/bin/run_daily_parquet_export_pipeline.sh
+          chmod +x ${DEPLOY_DIR}/bin/run_monthly_parquet_export_pipeline.sh
+        "
+        #如果miniconda3不存在，则安装miniconda3
+        ssh server "
+          if [ ! -d /home/ubuntu/miniconda3 ]; then
+            wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+            bash Miniconda3-latest-Linux-x86_64.sh -b -p /home/ubuntu/miniconda3
+            source /home/ubuntu/miniconda3/bin/activate
+          fi
         "
 
         # 安装依赖（生产用 miniconda）
