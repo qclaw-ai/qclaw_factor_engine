@@ -59,7 +59,7 @@ jobs:
           chmod +x ${DEPLOY_DIR}/bin/run_cos_upload_full.sh
           chmod +x ${DEPLOY_DIR}/bin/run_daily_full_pipeline.sh
           chmod +x ${DEPLOY_DIR}/bin/run_daily_parquet_export_pipeline.sh
-          chmod +x ${DEPLOY_DIR}/bin/run_monthly_parquet_export_pipeline.sh
+          chmod +x ${DEPLOY_DIR}/bin/run_monthly_parquet_backfill.sh
         "
         #如果miniconda3不存在，则安装miniconda3
         ssh server "
