@@ -102,6 +102,7 @@ def _upsert_factor_value_file(
     session,
     *,
     factor_id: str,
+    factor_name: str,
     universe: str,
     rel_path: str,
     date_start: str,
@@ -137,64 +138,88 @@ def _upsert_factor_value_file(
     }
 
     # 先更新已存在记录。这样不依赖 ON CONFLICT 推断部分唯一索引（WHERE artifact_type='batch_csv'）。
-    updated = session.execute(
-        text(
-            """
-            UPDATE factor_value_files
-            SET
-                rel_path = :rel_path,
-                batch_id = :batch_id,
-                stage = :stage,
-                is_rebase = :is_rebase,
-                created_at = CURRENT_TIMESTAMP,
-                comment = :comment
-            WHERE factor_id = :factor_id
-              AND universe = :universe
-              AND artifact_type = 'batch_csv'
-              AND date_start = :date_start
-              AND date_end = :date_end
-            """
-        ),
-        params,
-    )
-    if updated.rowcount and updated.rowcount > 0:
-        return
+    # 每次 upsert 用 SAVEPOINT 隔离失败，避免一个因子写库失败导致整个 session 进入 aborted。
+    # 并且把 factor_basic 的最小 upsert 放在同一个 SAVEPOINT 内，确保外键检查在同一事务视图内可见。
+    with session.begin_nested():
+        # 先保证 factor_basic 存在，否则插 factor_value_files 会被外键拒绝并导致事务进入 aborted。
+        # 这里做最小 upsert：只写必填字段 factor_id / factor_name，其余字段后续可由 pipeline 补齐。
+        session.execute(
+            text(
+                """
+                INSERT INTO factor_basic (
+                    factor_id,
+                    factor_name
+                ) VALUES (
+                    :factor_id,
+                    :factor_name
+                )
+                ON CONFLICT (factor_id) DO NOTHING
+                """
+            ),
+            {
+                "factor_id": factor_id,
+                "factor_name": factor_name,
+            },
+        )
 
-    # 未命中更新时再插入新行。
-    session.execute(
-        text(
-            """
-            INSERT INTO factor_value_files (
-                factor_id,
-                universe,
-                artifact_type,
-                rel_path,
-                date_start,
-                date_end,
-                trade_date,
-                batch_id,
-                stage,
-                is_rebase,
-                created_at,
-                comment
-            ) VALUES (
-                :factor_id,
-                :universe,
-                'batch_csv',
-                :rel_path,
-                :date_start,
-                :date_end,
-                NULL,
-                :batch_id,
-                :stage,
-                :is_rebase,
-                CURRENT_TIMESTAMP,
-                :comment
-            )
-            """
-        ),
-        params,
-    )
+        updated = session.execute(
+            text(
+                """
+                UPDATE factor_value_files
+                SET
+                    rel_path = :rel_path,
+                    batch_id = :batch_id,
+                    stage = :stage,
+                    is_rebase = :is_rebase,
+                    created_at = CURRENT_TIMESTAMP,
+                    comment = :comment
+                WHERE factor_id = :factor_id
+                  AND universe = :universe
+                  AND artifact_type = 'batch_csv'
+                  AND date_start = :date_start
+                  AND date_end = :date_end
+                """
+            ),
+            params,
+        )
+        if updated.rowcount and updated.rowcount > 0:
+            return
+
+        # 未命中更新时再插入新行。
+        session.execute(
+            text(
+                """
+                INSERT INTO factor_value_files (
+                    factor_id,
+                    universe,
+                    artifact_type,
+                    rel_path,
+                    date_start,
+                    date_end,
+                    trade_date,
+                    batch_id,
+                    stage,
+                    is_rebase,
+                    created_at,
+                    comment
+                ) VALUES (
+                    :factor_id,
+                    :universe,
+                    'batch_csv',
+                    :rel_path,
+                    :date_start,
+                    :date_end,
+                    NULL,
+                    :batch_id,
+                    :stage,
+                    :is_rebase,
+                    CURRENT_TIMESTAMP,
+                    :comment
+                )
+                """
+            ),
+            params,
+        )
 
 
 def _load_stock_daily(
@@ -1267,6 +1292,7 @@ def run_factor_engine(
                 _upsert_factor_value_file(
                     session,
                     factor_id=factor.factor_id,
+                    factor_name=factor.factor_name,
                     universe=universe,
                     rel_path=rel_path,
                     date_start=publish_start_date,
@@ -1281,6 +1307,8 @@ def run_factor_engine(
                     f"写入 factor_value_files 失败，factor_id={factor.factor_id}, "
                     f"universe={universe}, path={rel_path}, err={e}"
                 )
+                # 避免 session 落入 aborted 状态影响后续因子；这里显式回滚到干净状态。
+                session.rollback()
 
         session.commit()
     except Exception:
