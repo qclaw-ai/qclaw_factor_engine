@@ -222,6 +222,142 @@ def _upsert_factor_value_file(
         )
 
 
+def _factor_value_files_batch_csv_ids_for_job_key(
+    session,
+    *,
+    factor_id: str,
+    universe: str,
+    date_start: date,
+    date_end: date,
+) -> List[int]:
+    """
+    按 batch_csv 写入键查询 factor_value_files 行 id。
+
+    - 应与 _upsert_factor_value_file / 落库的 date_start、date_end 一致。
+    - UNIQUE 索引下常为 0/1 行；若为多行则说明数据异常。
+    """
+    rows = session.execute(
+        text(
+            """
+            SELECT id
+            FROM factor_value_files
+            WHERE factor_id = :factor_id
+              AND universe = :universe
+              AND artifact_type = 'batch_csv'
+              AND date_start = :date_start
+              AND date_end = :date_end
+            ORDER BY id ASC
+            """
+        ),
+        {
+            "factor_id": factor_id,
+            "universe": universe,
+            "date_start": date_start,
+            "date_end": date_end,
+        },
+    ).fetchall()
+    return [int(r[0]) for r in rows]
+
+
+def _factor_value_files_daily_csv_ids_for_trade_date(
+    session,
+    *,
+    factor_id: str,
+    universe: str,
+    trade_date: date,
+) -> List[int]:
+    """按 daily_csv + trade_date 查询 factor_value_files 行 id（与 daily_factor_values_runner 自然键对齐）。"""
+    rows = session.execute(
+        text(
+            """
+            SELECT id
+            FROM factor_value_files
+            WHERE factor_id = :factor_id
+              AND universe = :universe
+              AND artifact_type = 'daily_csv'
+              AND trade_date = :trade_date
+            ORDER BY id ASC
+            """
+        ),
+        {
+            "factor_id": factor_id,
+            "universe": universe,
+            "trade_date": trade_date,
+        },
+    ).fetchall()
+    return [int(r[0]) for r in rows]
+
+
+def _upsert_factor_value_files_daily_csv(
+    session,
+    *,
+    factor_id: str,
+    universe: str,
+    rel_path_posix: str,
+    trade_date: str,
+) -> None:
+    """
+    真分域日更登记：写 factor_value_files（daily_csv）。
+    与 daily_factor_values_runner._upsert_factor_value_files_daily SQL 对齐，避免两处语义分叉。
+    """
+    td = trade_date.strip()[:10]
+
+    updated = session.execute(
+        text(
+            """
+            UPDATE factor_value_files
+            SET rel_path = :rel_path,
+                trade_date = :trade_date_td,
+                date_start = NULL,
+                date_end = NULL,
+                created_at = CURRENT_TIMESTAMP
+            WHERE factor_id = :factor_id
+              AND universe = :universe
+              AND artifact_type = 'daily_csv'
+              AND trade_date = :trade_date_td
+            """
+        ),
+        {
+            "factor_id": factor_id,
+            "universe": universe,
+            "rel_path": rel_path_posix,
+            "trade_date_td": td,
+        },
+    )
+
+    if int(getattr(updated, "rowcount", 0) or 0) > 0:
+        return
+
+    session.execute(
+        text(
+            """
+            INSERT INTO factor_value_files (
+                factor_id,
+                universe,
+                artifact_type,
+                rel_path,
+                trade_date,
+                created_at
+            )
+            VALUES (
+                :factor_id,
+                :universe,
+                'daily_csv',
+                :rel_path,
+                :trade_date_td,
+                CURRENT_TIMESTAMP
+            )
+            """
+        ),
+        {
+            "factor_id": factor_id,
+            "universe": universe,
+            "rel_path": rel_path_posix,
+            "trade_date_td": td,
+        },
+    )
+
+
 def _load_stock_daily(
     config_file: str,
     start_date: str,
@@ -1127,14 +1263,29 @@ def run_factor_engine(
     # - universe_override 为 None：从配置文件读取；非 None 则经 normalize 后使用，并忽略 ini 的 universe。
     factor_ids_override: Optional[Sequence[str]] = None,
     universe_override: Optional[str] = None,
+    # skip_if_batch_csv_record_exists_override：None 读 ini；True/False 显式覆盖 skip_if_batch_csv_record_exists。
+    skip_if_batch_csv_record_exists_override: Optional[bool] = None,
+    # daily_csv_mode：日更语义，CSV 写入 factor_values/daily/by_universe/... ，factor_value_files.artifact_type=daily_csv，
+    # 与同仓库 factor_export_cos 中 daily_override_batch 对齐。要求 publish_start_date 与 end_date 同一天；
+    # start_date 可更早（回看/warmup），与 incremental 单笔单日任务一致。
+    daily_csv_mode: bool = False,
 ) -> None:
     """
     因子主计算（含行情加载、算子、落 CSV、回写 factor_value_files）。
 
     与 P1 / factor_pipeline_job 对接时，推荐优先传 ``factor_ids_override`` / ``universe_override``，
     与单条 job 参数对齐；其余 [factor_engine] 与 [jq] 等仍来自 ``config_file`` 根配置。
+
+    开关 ``skip_if_batch_csv_record_exists`` 默认开启：在计算前查询 ``factor_value_files``，
+    当前任务对应的 ``batch_csv`` / ``daily_csv``（daily_csv_mode 时按 trade_date）索引键，
+    只要已存在任意一行则跳过该因子不落 CSV。
+    配置文件或旧键设为 false（或 CLI ``--no-skip-if-batch-csv-record-exists``）可强制重算。
+    （若启用且同键多条，会先 INFO 跳过并额外 WARNING。）
     """
-    logger.info("启动 factor_engine_runner")
+    logger.info(
+        "启动 factor_engine_runner daily_csv_mode=%s",
+        bool(daily_csv_mode),
+    )
 
     cfg = Config(config_file=config_file)
 
@@ -1144,7 +1295,21 @@ def run_factor_engine(
         "end_date",
         fallback=datetime.now().strftime("%Y-%m-%d"),
     )
-    publish_start_date = publish_start_date_override or start_date
+    if publish_start_date_override is not None:
+        publish_start_date = publish_start_date_override
+    elif daily_csv_mode:
+        # 日报/单日任务：默认以区间右端点为发布日与 trade_date（左端点为加载/warmup 起点）。
+        publish_start_date = end_date
+    else:
+        publish_start_date = start_date
+
+    if daily_csv_mode:
+        d_pub = date.fromisoformat(str(publish_start_date).strip()[:10])
+        d_end = date.fromisoformat(str(end_date).strip()[:10])
+        if d_pub != d_end:
+            raise ValueError(
+                f"daily_csv_mode 要求发布日为单日区间：publish_start_date ({d_pub}) 须等于 end_date ({d_end})"
+            )
 
     if factor_ids_override is not None:
         factor_ids = _dedupe_factor_id_sequence(factor_ids_override)
@@ -1192,6 +1357,17 @@ def run_factor_engine(
     if stage not in ("candidate", "production", "deprecated"):
         raise ValueError(f"配置错误：factor_engine.stage 不合法（{stage}）")
 
+    # 优先读新键 skip_if_batch_csv_record_exists；若无则兼容旧键 skip_if_batch_csv_duplicate；均无则默认「开」。
+    if skip_if_batch_csv_record_exists_override is None:
+        v = cfg.getboolean("factor_engine", "skip_if_batch_csv_record_exists", fallback=None)
+        if v is None:
+            v = cfg.getboolean("factor_engine", "skip_if_batch_csv_duplicate", fallback=None)
+        if v is None:
+            v = True
+        skip_if_batch_csv_record_exists = bool(v)
+    else:
+        skip_if_batch_csv_record_exists = bool(skip_if_batch_csv_record_exists_override)
+
     # 黑名单：配置里可选的 skip_factor_ids，用逗号分隔
     skip_ids_raw = cfg.get("factor_engine", "skip_factor_ids", fallback="").strip()
     skip_factor_ids: List[str] = [
@@ -1203,7 +1379,8 @@ def run_factor_engine(
     logger.info(
         f"配置 - start_date={start_date}, end_date={end_date}, publish_start_date={publish_start_date}, "
         f"factor_ids={factor_ids or 'ALL'}, universe={universe}, "
-        f"batch_id={batch_id}, stage={stage}, is_rebase={is_rebase}"
+        f"batch_id={batch_id}, stage={stage}, is_rebase={is_rebase}, "
+        f"skip_if_batch_csv_record_exists={skip_if_batch_csv_record_exists}"
     )
 
     all_factors = load_all_factors()
@@ -1250,6 +1427,61 @@ def run_factor_engine(
     try:
         for factor in factors:
             logger.info(f"开始计算因子: {factor.factor_id} - {factor.factor_name}")
+
+            # 可选：若 factor_value_files 已存在当前任务索引行，则跳过计算（便于幂等重跑）。
+            if skip_if_batch_csv_record_exists:
+                if daily_csv_mode:
+                    td_key = date.fromisoformat(str(end_date).strip()[:10])
+                    row_ids = _factor_value_files_daily_csv_ids_for_trade_date(
+                        session,
+                        factor_id=factor.factor_id,
+                        universe=universe,
+                        trade_date=td_key,
+                    )
+                    if len(row_ids) >= 1:
+                        logger.info(
+                            "跳过因子计算：factor_value_files 已存在 daily_csv 索引记录。"
+                            "factor_id=%s universe=%s trade_date=%s row_count=%s ids=%s",
+                            factor.factor_id,
+                            universe,
+                            td_key.isoformat(),
+                            len(row_ids),
+                            row_ids,
+                        )
+                        if len(row_ids) > 1:
+                            logger.warning(
+                                "factor_value_files 同一 daily_csv 键存在多条记录（数据异常，应唯一）：ids=%s",
+                                row_ids,
+                            )
+                        continue
+                else:
+                    ds_key = date.fromisoformat(str(publish_start_date).strip()[:10])
+                    de_key = date.fromisoformat(str(end_date).strip()[:10])
+                    row_ids = _factor_value_files_batch_csv_ids_for_job_key(
+                        session,
+                        factor_id=factor.factor_id,
+                        universe=universe,
+                        date_start=ds_key,
+                        date_end=de_key,
+                    )
+                    if len(row_ids) >= 1:
+                        logger.info(
+                            "跳过因子计算：factor_value_files 已存在 batch_csv 索引记录。"
+                            "factor_id=%s universe=%s date_start=%s date_end=%s row_count=%s ids=%s",
+                            factor.factor_id,
+                            universe,
+                            ds_key.isoformat(),
+                            de_key.isoformat(),
+                            len(row_ids),
+                            row_ids,
+                        )
+                        if len(row_ids) > 1:
+                            logger.warning(
+                                "factor_value_files 同一 batch_csv 自然键存在多条记录（数据异常，应唯一）：ids=%s",
+                                row_ids,
+                            )
+                        continue
+
             try:
                 raw_series = compute_factor_values(factor.formula, price_df)
                 processed_series = winsorize_and_standardize(raw_series)
@@ -1270,37 +1502,62 @@ def run_factor_engine(
                 f"{df_out.head().to_string(index=False)}"
             )
 
-            # 导出完整结果为 CSV（全域统一 by_universe，包含 ALL）。
-            output_dir = os.path.join("factor_values", "by_universe", universe)
-            csv_name = (
-                f"{factor.factor_id}_{universe}_{publish_start_date}_{end_date}.csv"
-                .replace(":", "")
-                .replace(" ", "")
-            )
+            # 导出 CSV：batch 沿用 by_universe 区间文件名；daily_csv_mode 与同仓库 daily_factor_values 路径一致。
+            publish_iso = str(publish_start_date).strip()[:10]
+            if daily_csv_mode:
+                output_dir = os.path.join(
+                    "factor_values",
+                    "daily",
+                    "by_universe",
+                    universe,
+                    publish_iso,
+                )
+                csv_name = f"{factor.factor_id}.csv"
+            else:
+                output_dir = os.path.join("factor_values", "by_universe", universe)
+                csv_name = (
+                    f"{factor.factor_id}_{universe}_{publish_start_date}_{end_date}.csv"
+                    .replace(":", "")
+                    .replace(" ", "")
+                )
+
             os.makedirs(output_dir, exist_ok=True)
             csv_path = os.path.join(output_dir, csv_name)
             df_out.to_csv(csv_path, index=False)
             logger.info(f"因子 {factor.factor_id} 结果已导出到 CSV: {csv_path}")
 
-            # 回写 factor_value_files（真分域路径索引表）
+            # 回写 factor_value_files（batch_csv / daily_csv）
             try:
                 rel_path = Path(csv_path).resolve().relative_to(project_root).as_posix()
             except ValueError:
                 rel_path = Path(csv_path).as_posix()
 
             try:
-                _upsert_factor_value_file(
-                    session,
-                    factor_id=factor.factor_id,
-                    factor_name=factor.factor_name,
-                    universe=universe,
-                    rel_path=rel_path,
-                    date_start=publish_start_date,
-                    date_end=end_date,
-                    batch_id=batch_id,
-                    stage=stage,
-                    is_rebase=is_rebase,
-                )
+                if daily_csv_mode:
+                    _upsert_factor_value_files_daily_csv(
+                        session,
+                        factor_id=factor.factor_id,
+                        universe=universe,
+                        rel_path_posix=rel_path,
+                        trade_date=publish_iso,
+                    )
+                else:
+                    _upsert_factor_value_file(
+                        session,
+                        factor_id=factor.factor_id,
+                        factor_name=factor.factor_name,
+                        universe=universe,
+                        rel_path=rel_path,
+                        date_start=publish_start_date,
+                        date_end=end_date,
+                        batch_id=batch_id,
+                        stage=stage,
+                        is_rebase=is_rebase,
+                    )
+                # 每个因子独立提交，提升可观测性与容错性：
+                # - 中途可在 DB 看到已完成因子
+                # - 单因子失败不会回滚此前成功写入
+                session.commit()
             except Exception as e:
                 # 不中断主计算；记录错误供后续补写。
                 logger.error(
@@ -1309,8 +1566,6 @@ def run_factor_engine(
                 )
                 # 避免 session 落入 aborted 状态影响后续因子；这里显式回滚到干净状态。
                 session.rollback()
-
-        session.commit()
     except Exception:
         session.rollback()
         raise
@@ -1354,9 +1609,33 @@ def main():
         default=None,
         help="显式覆写 [factor_engine].universe（如 ALL/HS300），与 run_factor_engine(universe_override=...) 一致；不传则读配置",
     )
+    parser.add_argument(
+        "--skip-if-batch-csv-record-exists",
+        action="store_true",
+        help="明确开启（默认即已开启）：已存在 batch_csv 索引则跳过；与 --no-skip-if-batch-csv-record-exists 勿同用",
+    )
+    parser.add_argument(
+        "--no-skip-if-batch-csv-record-exists",
+        action="store_true",
+        help="覆盖为关闭：照常计算并写库（即使 factor_value_files 已有该键索引）",
+    )
+    parser.add_argument(
+        "--daily-csv",
+        action="store_true",
+        help=(
+            "日更模式：CSV 写入 factor_values/daily/by_universe/<universe>/<YYYY-MM-DD>/<factor>.csv；"
+            "factor_value_files.artifact_type=daily_csv（与 factor_export 中 daily_override_batch 对齐）。"
+            "发布日为 --end-date；--start-date 可更早用于 Warmup。"
+        ),
+    )
     args = parser.parse_args()
 
     is_rebase_override: Optional[bool] = None
+    if args.skip_if_batch_csv_record_exists and args.no_skip_if_batch_csv_record_exists:
+        raise SystemExit(
+            "错误：--skip-if-batch-csv-record-exists 与 --no-skip-if-batch-csv-record-exists 不能同时使用"
+        )
+
     if args.is_rebase and args.no_rebase:
         raise ValueError("--is-rebase 与 --no-rebase 不能同时使用")
     if args.is_rebase:
@@ -1377,16 +1656,27 @@ def main():
             raise SystemExit("错误：--universe 不能为全空白，或不要传此参数以使用配置文件")
         universe_arg = s
 
+    if args.skip_if_batch_csv_record_exists:
+        skip_csv_record_override_flag: Optional[bool] = True
+    elif args.no_skip_if_batch_csv_record_exists:
+        skip_csv_record_override_flag = False
+    else:
+        skip_csv_record_override_flag = None
+
+    publish_start_cli: Optional[str] = args.end_date if args.daily_csv else args.start_date
+
     run_factor_engine(
         config_file=args.config,
         start_date_override=args.start_date,
         end_date_override=args.end_date,
-        publish_start_date_override=args.start_date,
+        publish_start_date_override=publish_start_cli,
         batch_id_override=args.batch_id,
         stage_override=args.stage,
         is_rebase_override=is_rebase_override,
         factor_ids_override=factor_ids_arg,
         universe_override=universe_arg,
+        skip_if_batch_csv_record_exists_override=skip_csv_record_override_flag,
+        daily_csv_mode=bool(args.daily_csv),
     )
 
 

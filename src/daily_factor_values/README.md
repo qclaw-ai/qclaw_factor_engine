@@ -42,7 +42,7 @@ python src/daily_factor_values/daily_factor_values_runner.py ^
   --scope all_in_basic
 ```
 
-2. **某日在截面上无行**：多为 **`lookback_days` 偏短**，长窗口因子在 T 日尚未形成有效值，可增大 `[daily] lookback_days`。
+2. **某日在截面上无行**：多为 **[factor_incremental].warmup_trading_days（或 `--warmup-trading-days`）偏小**，或 **`stock_daily` 历史太短**（先检查 `daily_stock_and_calendar_sync` 的 `--lookback-days`）。
 
 3. **终端里 numpy 的 RuntimeWarning**：多为 `quantile`/缺失值引起，一般**不等于**写库失败；以日志里是否出现「已写出…并更新 factor_value_files(daily_csv)」为准。
 
@@ -58,5 +58,5 @@ python src/daily_factor_values/daily_factor_values_runner.py ^
 
 ## 依赖
 
-- `stock_daily` 在 `[T-lookback_days, T]` 内有数据。
+- `stock_daily` 覆盖引擎所需区间：**pipeline** 侧用自然日回填（例如 `daily_stock_and_calendar_sync --lookback-days`）；因子侧 warmup 见 `[factor_incremental].warmup_trading_days`。
 - 表 `factor_value_files` 可写，且支持 `artifact_type='daily_csv'`、`universe` 维度与 `rel_path` 更新。

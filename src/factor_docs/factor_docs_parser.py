@@ -127,7 +127,6 @@ def parse_factor_md_content(content: str, *, doc_path: str = "") -> Optional[Fac
 
 def parse_factor_md(path: str) -> Optional[FactorDefinition]:
     """解析单个因子 Markdown 文档"""
-    logger.info(f"解析因子文档: {path}")
 
     try:
         with open(path, "r", encoding="utf-8") as f:

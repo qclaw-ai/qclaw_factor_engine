@@ -43,7 +43,11 @@ TRADE_DATE="${1:-$(date +%F)}"
 ENABLE_COS_UPLOAD="${ENABLE_COS_UPLOAD:-0}"
 ENABLE_COS_SYNC="${ENABLE_COS_SYNC:-0}"
 
-echo "$(date '+%Y-%m-%d %H:%M:%S') - daily full pipeline 开始, T=${TRADE_DATE}, universe=${UNIVERSE}, month=${MONTH}, ENV=${ENV}" >> "${LOG_FILE}"
+# 透传给 bin/run_daily_parquet_export_pipeline.sh：默认跳过 CSV 抽样对账；严格对账设 SKIP_RECONCILE=0
+SKIP_RECONCILE="${SKIP_RECONCILE:-1}"
+export SKIP_RECONCILE
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') - daily full pipeline 开始, T=${TRADE_DATE}, universe=${UNIVERSE}, month=${MONTH}, ENV=${ENV}, skip_reconcile=${SKIP_RECONCILE}" >> "${LOG_FILE}"
 
 set +e
 
@@ -59,13 +63,8 @@ if [ ${EXIT_CODE} -eq 0 ]; then
   EXIT_CODE=$?
 fi
 
-# 3) 可选：同步 COS（需要 COS_SYNC_CMD 或参数）
-if [ ${EXIT_CODE} -eq 0 ] && ( [ "${ENABLE_COS_SYNC}" = "1" ] || [ "${ENABLE_COS_SYNC}" = "true" ] ); then
-  bin/run_cos_sync_factor_export_parquet.sh >> "${LOG_FILE}" 2>&1
-  EXIT_CODE=$?
-fi
 
-# 4) 可选：SDK 上传 COS（每日增量）
+# 3) 可选：SDK 上传 COS（每日增量）
 if [ ${EXIT_CODE} -eq 0 ] && ( [ "${ENABLE_COS_UPLOAD}" = "1" ] || [ "${ENABLE_COS_UPLOAD}" = "true" ] ); then
   bin/run_cos_upload_daily.sh >> "${LOG_FILE}" 2>&1
   EXIT_CODE=$?

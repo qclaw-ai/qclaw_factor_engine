@@ -42,14 +42,17 @@ LABEL_MAX_ROWS_PER_PART="${LABEL_MAX_ROWS_PER_PART:-500000}"
 
 SKIP_VALIDATE="${SKIP_VALIDATE:-0}"
 
+# validate_factor_export：默认跳过 CSV 抽样对账；需要严格对账时设 SKIP_RECONCILE=0（与 monthly 回填语义一致）
+SKIP_RECONCILE="${SKIP_RECONCILE:-1}"
+
 echo "$(date '+%Y-%m-%d %H:%M:%S') - daily parquet export pipeline 开始, universe=${UNIVERSE}, month=${MONTH}, stage=${STAGE}, ENV=${ENV}" >> "${LOG_FILE}"
-echo "$(date '+%Y-%m-%d %H:%M:%S') - output_root=${OUTPUT_ROOT}, include_daily=${INCLUDE_DAILY}, daily_recent_days=${DAILY_RECENT_DAYS}" >> "${LOG_FILE}"
+echo "$(date '+%Y-%m-%d %H:%M:%S') - output_root=${OUTPUT_ROOT}, include_daily=${INCLUDE_DAILY}, daily_recent_days=${DAILY_RECENT_DAYS}, skip_validate=${SKIP_VALIDATE}, skip_reconcile=${SKIP_RECONCILE}" >> "${LOG_FILE}"
 
 set +e
 
 # 1) factor export
 cmd_factor=(
-  "${PYTHON_BIN}" run_factor_export_parquet.py
+  "${PYTHON_BIN}" src/factor_export_cos/factor_export_runner.py
   --config config.ini
   --universe "${UNIVERSE}"
   --month "${MONTH}"
@@ -68,7 +71,7 @@ EXIT_CODE=$?
 # 2) label export
 if [ ${EXIT_CODE} -eq 0 ]; then
   cmd_label=(
-    "${PYTHON_BIN}" run_label_export_parquet.py
+    "${PYTHON_BIN}" src/factor_export_cos/label_export_runner.py
     --config config.ini
     --universe "${UNIVERSE}"
     --month "${MONTH}"
@@ -89,6 +92,9 @@ if [ ${EXIT_CODE} -eq 0 ] && ! ( [ "${SKIP_VALIDATE}" = "1" ] || [ "${SKIP_VALID
     --month "${MONTH}"
     --project-root "."
   )
+  if [ "${SKIP_RECONCILE}" = "1" ] || [ "${SKIP_RECONCILE}" = "true" ]; then
+    cmd_validate_factor+=( --skip-reconcile )
+  fi
   "${cmd_validate_factor[@]}" >> "${LOG_FILE}" 2>&1
   EXIT_CODE=$?
 

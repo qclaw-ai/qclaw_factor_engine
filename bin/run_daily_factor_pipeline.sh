@@ -55,15 +55,19 @@ if [ ${EXIT_CODE} -eq 0 ]; then
   EXIT_CODE=$?
 fi
 
-# 3) 发布产出到目标机（rsync + ssh）
-# - 默认走你测试通过的路径；可用环境变量覆盖，便于不同机器/环境复用
-# - 仅在前序步骤成功时才推送，避免把不完整/失败产出同步出去
+# 3) 可选：发布产出到目标机（rsync + ssh）；默认关闭（ENABLE_RSYNC_PUBLISH=1 或 true 时执行）
+# - 路径可通过 RSYNC_SRC / RSYNC_DEST 覆盖；仅在前序步骤成功时才推送
+ENABLE_RSYNC_PUBLISH="${ENABLE_RSYNC_PUBLISH:-0}"
 RSYNC_SRC="${RSYNC_SRC:-/data/qclaw/qclaw_factor_engine/factor_values/}"
 RSYNC_DEST="${RSYNC_DEST:-ubuntu@10.1.0.5:/data/factor/}"
 
 if [ ${EXIT_CODE} -eq 0 ]; then
-  rsync -avz "${RSYNC_SRC}" "${RSYNC_DEST}" >> "${LOG_FILE}" 2>&1
-  EXIT_CODE=$?
+  if [ "${ENABLE_RSYNC_PUBLISH}" = "1" ] || [ "${ENABLE_RSYNC_PUBLISH}" = "true" ]; then
+    rsync -avz "${RSYNC_SRC}" "${RSYNC_DEST}" >> "${LOG_FILE}" 2>&1
+    EXIT_CODE=$?
+  else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - 跳过 rsync 发布（ENABLE_RSYNC_PUBLISH=${ENABLE_RSYNC_PUBLISH}）" >> "${LOG_FILE}"
+  fi
 fi
 
 set -euo pipefail

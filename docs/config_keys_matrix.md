@@ -50,7 +50,6 @@
 
 | section.key | 调用模块 / 函数 | 用途 |
 |---|---|---|
-| `daily.lookback_days` | `src/daily_factor_values/daily_factor_values_runner.py` -> `main()` | 日更行情回看窗口 |
 | `daily.scope` | `src/daily_factor_values/daily_factor_values_runner.py` -> `main()` | `valid_only` / `all_in_basic` |
 | `daily.universe` | `src/daily_factor_values/daily_factor_values_runner.py` -> `main()` | 日更所属域 |
 
@@ -77,7 +76,7 @@
 | `factor_incremental.factor_engine_config_file` | `src/factor_incremental/factor_incremental_runner.py` -> `run_factor_incremental()` | 增量编排调用的 factor_engine 配置路径 |
 | `factor_incremental.mode` | `src/factor_incremental/factor_incremental_runner.py` -> `run_factor_incremental()` | `incremental` / `rebase` |
 | `factor_incremental.stage` | `src/factor_incremental/factor_incremental_runner.py` -> `run_factor_incremental()` | 写入阶段 |
-| `factor_incremental.warmup_trading_days` | `src/factor_incremental/factor_incremental_runner.py` -> `run_factor_incremental()` | 预热交易日数 |
+| `factor_incremental.warmup_trading_days` | `src/factor_incremental/factor_incremental_runner.py` -> `run_factor_incremental()`；`src/daily_factor_values/daily_factor_values_runner.py` -> `run_daily_factor_values()` | 引擎计算区间起点前移（交易日 warmup；日更与增量共用） |
 
 ---
 

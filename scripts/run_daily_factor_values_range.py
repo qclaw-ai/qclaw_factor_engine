@@ -49,16 +49,16 @@ def main() -> None:
     parser.add_argument("--end-date", default="2026-04-26", help="结束日期（YYYY-MM-DD）")
     parser.add_argument("--universe", default="", help="可选覆盖配置中的 [daily].universe")
     parser.add_argument("--scope", choices=("valid_only", "all_in_basic"), default="", help="可选覆盖配置中的 [daily].scope")
-    parser.add_argument("--lookback-days", type=int, default=None, help="可选覆盖配置中的 [daily].lookback_days")
+    parser.add_argument(
+        "--warmup-trading-days",
+        type=int,
+        default=None,
+        help="可选，覆盖 [factor_incremental].warmup_trading_days；不传则用配置默认。",
+    )
     parser.add_argument("--factor-ids", default="", help="可选：逗号分隔，仅联调少量因子")
     args = parser.parse_args()
 
     cfg = Config(config_file=args.config)
-
-    # 若 CLI 没传覆盖值，则复用项目现有 daily 配置，和单日 runner 行为保持一致。
-    lookback_days = args.lookback_days
-    if lookback_days is None:
-        lookback_days = cfg.getint("daily", "lookback_days", fallback=380)
 
     scope = (args.scope or cfg.get("daily", "scope", fallback="all_in_basic") or "all_in_basic").strip()
     if scope not in ("valid_only", "all_in_basic"):
@@ -69,12 +69,12 @@ def main() -> None:
     factor_ids_filter = [x.strip() for x in args.factor_ids.split(",") if x.strip()] if args.factor_ids.strip() else None
 
     logger.info(
-        "批量日更启动 start=%s end=%s universe=%s scope=%s lookback_days=%s factor_ids=%s",
+        "批量日更启动 start=%s end=%s universe=%s scope=%s warmup_trading_days=%s factor_ids=%s",
         args.start_date,
         args.end_date,
         universe,
         scope,
-        lookback_days,
+        args.warmup_trading_days if args.warmup_trading_days is not None else "config",
         factor_ids_filter or "ALL",
     )
 
@@ -90,10 +90,10 @@ def main() -> None:
             run_daily_factor_values(
                 config_file=args.config,
                 trade_date=trade_date,
-                lookback_days=int(lookback_days),
                 factor_ids_filter=factor_ids_filter,
                 scope=scope,
                 universe=universe,
+                warmup_trading_days=args.warmup_trading_days,
             )
             success += 1
             logger.info("完成 trade_date=%s", trade_date)

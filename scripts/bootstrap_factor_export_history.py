@@ -100,7 +100,7 @@ def main() -> None:
 
         export_cmd = [
             sys.executable,
-            "run_factor_export_parquet.py",
+            "src/factor_export_cos/factor_export_runner.py",
             "--config",
             args.config,
             "--universe",

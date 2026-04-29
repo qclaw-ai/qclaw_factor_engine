@@ -174,19 +174,54 @@ def _build_in_clause(param_prefix: str, items: List[str]) -> Tuple[str, Dict[str
     return "(" + ",".join(placeholders) + ")", params
 
 
+def _ingest_cfg_str_pri_then_legacy(cfg: Config, key: str, legacy_fallback: str = "") -> str:
+    """聚宽股票池口径：优先 [data_ingest_jq_initial]，空则回退 [data_ingest]（兼容旧 ini）。"""
+    v = cfg.get("data_ingest_jq_initial", key, fallback="").strip()
+    if v:
+        return v
+
+    return cfg.get("data_ingest", key, fallback=legacy_fallback).strip()
+
+
+def _jq_get_price_batch_size(cfg: Config) -> int:
+    """与 data_ingest_stock_daily_jq_initial 对齐：优先 [data_ingest_jq_initial].batch_size，再到 [sync].jq_batch_size。"""
+    n = cfg.getint("data_ingest_jq_initial", "batch_size", fallback=0)
+    if isinstance(n, int) and n > 0:
+        return n
+
+    n2 = cfg.getint("sync", "jq_batch_size", fallback=0)
+    if isinstance(n2, int) and n2 > 0:
+        return n2
+
+    return 200
+
+
 def _resolve_universe_for_jq(cfg: Config, end_date: str) -> Tuple[List[str], List[str], Dict[str, str]]:
     """
     返回：
     - internal_stock_codes（用于 stock_daily）
     - jq_codes（用于 get_price）
     - jq_code_to_internal 映射
+
+    优先按 [data_ingest_jq_initial] 解析 universe（与同仓库聚宽 API 首包脚本一致）；若拿不到任何 jq_codes，
+    再回退 [data_ingest]。
     """
-    internal_stock_codes, jq_codes, jq_code_to_internal, _ = _common_resolve_universe_for_jq(
-        cfg=cfg,
-        end_date=end_date,
-        section="data_ingest",
-    )
-    return internal_stock_codes, jq_codes, jq_code_to_internal
+    last_internal: List[str] = []
+    last_jq: List[str] = []
+    last_map: Dict[str, str] = {}
+
+    for section in ("data_ingest_jq_initial", "data_ingest"):
+        internal_stock_codes, jq_codes, jq_code_to_internal, _ = _common_resolve_universe_for_jq(
+            cfg=cfg,
+            end_date=end_date,
+            section=section,
+        )
+
+        last_internal, last_jq, last_map = internal_stock_codes, jq_codes, jq_code_to_internal
+        if jq_codes:
+            return internal_stock_codes, jq_codes, jq_code_to_internal
+
+    return last_internal, last_jq, last_map
 
 
 def _upsert_stock_daily(session, records: List[Dict[str, object]]) -> int:
@@ -462,7 +497,7 @@ def _sync_stock_daily_from_jq(
         logger.warning("jq fallback：universe 无可用 jq_codes，跳过 stock_daily 同步")
         return 0
 
-    batch_size = cfg.getint("sync", "jq_batch_size", fallback=200)
+    batch_size = _jq_get_price_batch_size(cfg)
     # 对齐 JQsync.py / data_ingest_stock_daily_jq_initial.py 的字段口径
     fields = ["open", "high", "low", "close", "volume", "money", "pre_close", "high_limit", "low_limit", "paused"]
 
@@ -594,9 +629,9 @@ def run_sync(config_file: str, trade_date: str, lookback_days: int, calendar_buf
                     "on",
                 )
                 # CUSTOM 可不依赖 jqdatasdk；其他 universe 若开启 symbol_filter，则用 jqdatasdk 解析出内部 stock_code 列表
-                universe = cfg.get("data_ingest", "universe", fallback="CUSTOM").upper()
+                universe = _ingest_cfg_str_pri_then_legacy(cfg, "universe", legacy_fallback="CUSTOM").upper()
                 if universe == "CUSTOM":
-                    raw_codes = cfg.get("data_ingest", "stock_codes", fallback="").strip()
+                    raw_codes = _ingest_cfg_str_pri_then_legacy(cfg, "stock_codes", legacy_fallback="")
                     internal_stock_codes = [
                         _normalize_stock_code_from_source_symbol(x.strip())
                         for x in raw_codes.split(",")

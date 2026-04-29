@@ -43,7 +43,10 @@ LABEL_MAX_ROWS_PER_PART="${LABEL_MAX_ROWS_PER_PART:-500000}"
 
 STOP_ON_ERROR="${STOP_ON_ERROR:-1}"
 
-echo "$(date '+%Y-%m-%d %H:%M:%S') - monthly parquet backfill 开始 universe=${UNIVERSE} months=${START_MONTH}..${END_MONTH} ENV=${ENV}" >> "${LOG_FILE}"
+# factor 回填校验：`validate_factor_export.py` 的 CSV 抽样对账失败时可跳过（不传则做全量校验）
+SKIP_RECONCILE="${SKIP_RECONCILE:-1}"
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') - monthly parquet backfill 开始 universe=${UNIVERSE} months=${START_MONTH}..${END_MONTH} ENV=${ENV} SKIP_RECONCILE=${SKIP_RECONCILE}" >> "${LOG_FILE}"
 
 set +e
 
@@ -64,6 +67,9 @@ if [ "${INCLUDE_DAILY}" = "1" ] || [ "${INCLUDE_DAILY}" = "true" ]; then
 fi
 if [ "${STOP_ON_ERROR}" = "1" ] || [ "${STOP_ON_ERROR}" = "true" ]; then
   cmd_factor+=( --stop-on-error )
+fi
+if [ "${SKIP_RECONCILE}" = "1" ] || [ "${SKIP_RECONCILE}" = "true" ]; then
+  cmd_factor+=( --skip-reconcile )
 fi
 
 "${cmd_factor[@]}" >> "${LOG_FILE}" 2>&1

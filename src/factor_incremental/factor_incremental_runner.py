@@ -6,8 +6,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import date, datetime, timedelta
+from typing import Optional, Tuple
 
 from sqlalchemy import text
 
@@ -44,6 +44,51 @@ def _get_last_batch_end_date(config_file: str, universe: str) -> Optional[str]:
         return str(row["max_date_end"])
     finally:
         session.close()
+
+
+def _get_max_trade_date_stock_daily(config_file: str) -> Optional[str]:
+    """读取 stock_daily 全局 MAX(trade_date)（DATE 兼容 YYYY-MM-DD 字符串）。"""
+    db_manager = get_db_manager(config_file=config_file)
+    session = db_manager.get_session()
+    try:
+        row = session.execute(
+            text("SELECT MAX(trade_date) AS mx FROM stock_daily"),
+        ).mappings().first()
+        if not row or row["mx"] is None:
+            return None
+        s = str(row["mx"]).strip()
+        return s[:10] if len(s) >= 10 else s
+    finally:
+        session.close()
+
+
+def _clamp_requested_end_to_quotes(requested_end: str, config_file: str) -> Tuple[str, Optional[str]]:
+    """将编排层请求的结束日收成 min(requested, stock_daily 实际最晚交易日)。
+
+    避免 factor_value_files / batch_id 的 date_end 晚于真实因子可计算区间，从而导致后续 incremental
+    从「虚高日历日」+1 起跑而漏掉待补的行情区间。
+
+    返回 (effective_end_iso, db_max_trade_date_or_none)。"""
+    max_td = _get_max_trade_date_stock_daily(config_file)
+    req_s = requested_end.strip()[:10]
+    if not max_td:
+        logger.warning(
+            "stock_daily 无 MAX(trade_date)，无法收成 end_date，仍使用请求日=%s",
+            req_s,
+        )
+        return req_s, None
+
+    req_d = date.fromisoformat(req_s)
+    db_d = date.fromisoformat(max_td.strip()[:10])
+    if req_d > db_d:
+        logger.warning(
+            "批次结束日晚于行情实际最新交易日，将 end_date 从 %s 收成 %s",
+            req_s,
+            max_td,
+        )
+        return max_td.strip()[:10], max_td
+
+    return req_s, max_td
 
 
 def _shift_trading_date(config_file: str, anchor_date: str, shift_days: int) -> str:
@@ -88,8 +133,9 @@ def run_factor_incremental(
 ) -> None:
     """增量/重算编排入口。
 
-    - incremental: 从 last_date_end + 1 到 as_of_date
-    - rebase: 使用 factor_engine 配置中的 start_date 到 as_of_date
+    - incremental: 从 last_date_end + 1 到 as_of（as_of 会先与 stock_daily 全局 MAX(trade_date) 收成，
+      避免元数据日期晚于真实行情）
+    - rebase: 使用 factor_engine 配置中的 start_date 到 as_of（同样先收成）
     """
     cfg = Config(config_file=config_file)
     factor_engine_config_file = cfg.get(
@@ -100,7 +146,12 @@ def run_factor_incremental(
     fe_cfg = Config(config_file=factor_engine_config_file)
     universe = normalize_universe_code(fe_cfg.get("factor_engine", "universe", fallback="ALL"))
     base_start_date = fe_cfg.get("factor_engine", "start_date", fallback="2024-01-01")
-    run_end_date = as_of_date or datetime.now().strftime("%Y-%m-%d")
+    requested_run_end_date = as_of_date or datetime.now().strftime("%Y-%m-%d")
+
+    run_end_date, _ = _clamp_requested_end_to_quotes(
+        requested_run_end_date,
+        config_file=factor_engine_config_file,
+    )
 
     mode = (mode or cfg.get("factor_incremental", "mode", fallback="incremental")).strip().lower()
     if mode not in ("incremental", "rebase"):
@@ -136,6 +187,19 @@ def run_factor_incremental(
             run_start_date = base_start_date
         is_rebase = False
 
+    # 收成后若业务起点晚于可实现结束日（多见于历史批次 date_end 已虚高或行情长期落后），不再调用 engine。
+    if (
+        datetime.strptime(run_start_date, "%Y-%m-%d").date()
+        > datetime.strptime(run_end_date.strip()[:10], "%Y-%m-%d").date()
+    ):
+        logger.error(
+            "收成 incremental 区间为倒序：run_start=%s > effective_end=%s（请先补齐 stock_daily 或检查 "
+            "factor_value_files）。本次跳过。",
+            run_start_date,
+            run_end_date,
+        )
+        return
+
     calc_start_date = _shift_trading_date(
         config_file=factor_engine_config_file,
         anchor_date=run_start_date,
@@ -150,13 +214,14 @@ def run_factor_incremental(
 
     logger.info(
         (
-            "增量编排启动 mode=%s universe=%s run_start=%s calc_start=%s end_date=%s "
+            "增量编排启动 mode=%s universe=%s run_start=%s calc_start=%s requested_end=%s end_date=%s "
             "warmup_trading_days=%s stage=%s batch_id=%s is_rebase=%s factor_engine_config=%s"
         ),
         mode,
         universe,
         run_start_date,
         calc_start_date,
+        requested_run_end_date,
         run_end_date,
         effective_warmup_days,
         stage,

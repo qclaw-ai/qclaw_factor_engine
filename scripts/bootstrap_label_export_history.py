@@ -4,7 +4,7 @@
 """
 Label 单独历史回填脚本（按月）：
 
-- 调用 run_label_export_parquet.py（stock_daily → y_ret_1d）
+- 调用 src/factor_export_cos/label_export_runner.py（stock_daily → y_ret_1d/y_ret_5d）
 - 每月导出后可选执行 scripts/validate_label_export.py
 
 与 bootstrap_factor_export_history.py（因子导出）互不依赖。
@@ -98,7 +98,7 @@ def main() -> None:
 
         export_cmd = [
             sys.executable,
-            "run_label_export_parquet.py",
+            "src/factor_export_cos/label_export_runner.py",
             "--config",
             args.config,
             "--universe",

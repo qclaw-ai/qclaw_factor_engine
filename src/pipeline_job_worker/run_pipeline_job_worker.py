@@ -15,9 +15,10 @@ import logging
 import os
 import sys
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-if os.path.join(ROOT, "src") not in sys.path:
-    sys.path.insert(0, os.path.join(ROOT, "src"))
+# 当前文件位于 src/pipeline_job_worker/ 下，这里把仓库根加入 sys.path，使其行为与旧版根目录脚本一致。
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 
 def main() -> None:
