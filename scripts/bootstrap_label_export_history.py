@@ -13,6 +13,7 @@ Label 单独历史回填脚本（按月）：
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -63,7 +64,10 @@ def _iter_months(start_month: str, end_month: str) -> List[str]:
 
 def _run_cmd(cmd: List[str], cwd: Path) -> subprocess.CompletedProcess:
     """执行子命令并实时透传日志。"""
-    return subprocess.run(cmd, cwd=str(cwd), check=False)
+    env = os.environ.copy()
+    # 确保能以 -m factor_export_cos.label_export_runner 方式执行（需要把 src 加入 PYTHONPATH）
+    env["PYTHONPATH"] = f"{(PROJECT_ROOT / 'src').as_posix()}" + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    return subprocess.run(cmd, cwd=str(cwd), env=env, check=False)
 
 
 def main() -> None:
@@ -98,7 +102,8 @@ def main() -> None:
 
         export_cmd = [
             sys.executable,
-            "src/factor_export_cos/label_export_runner.py",
+            "-m",
+            "factor_export_cos.label_export_runner",
             "--config",
             args.config,
             "--universe",

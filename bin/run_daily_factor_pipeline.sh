@@ -30,10 +30,15 @@ echo "$(date '+%Y-%m-%d %H:%M:%S') - 日内因子 pipeline 开始, T=${TRADE_DAT
 cmd_ingest=(
   "${PYTHON_BIN}" src/data_ingest/daily_stock_and_calendar_sync.py
   --trade-date "${TRADE_DATE}"
-  --lookback-days 380
+  --lookback-days 5
   --calendar-buffer-days 10
 )
+
+# 需要显式捕获退出码，避免 stock_daily 同步失败直接被 set -e 中断
+set +e
+
 "${cmd_ingest[@]}" >> "${LOG_FILE}" 2>&1
+EXIT_CODE=$?
 
 # 2) 跑日更因子值（ALL 域）
 cmd_daily=(
@@ -45,10 +50,6 @@ cmd_daily=(
 # 说明：
 # - 脚本顶部 set -e 会让任意一步失败直接退出，后面拿不到 $? 做统一收口
 # - 这里显式捕获每一步退出码，保证日志/发布（rsync）行为可控
-set +e
-
-"${cmd_ingest[@]}" >> "${LOG_FILE}" 2>&1
-EXIT_CODE=$?
 
 if [ ${EXIT_CODE} -eq 0 ]; then
   "${cmd_daily[@]}" >> "${LOG_FILE}" 2>&1

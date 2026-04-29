@@ -71,7 +71,7 @@ EXIT_CODE=$?
 # 2) label export
 if [ ${EXIT_CODE} -eq 0 ]; then
   cmd_label=(
-    "${PYTHON_BIN}" src/factor_export_cos/label_export_runner.py
+    "${PYTHON_BIN}" -m factor_export_cos.label_export_runner
     --config config.ini
     --universe "${UNIVERSE}"
     --month "${MONTH}"
