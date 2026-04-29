@@ -37,11 +37,11 @@ export MONTH
 
 TRADE_DATE="${1:-$(date +%F)}"
 
-# 是否在末尾同步 COS（默认关闭）
+# 是否在末尾同步 COS（默认打开）
 # - ENABLE_COS_UPLOAD：走 COS SDK 上传（bin/run_cos_upload_daily.sh）
 # - ENABLE_COS_SYNC：走通用壳（bin/run_cos_sync_factor_export_parquet.sh，适合 coscmd/rclone）
-ENABLE_COS_UPLOAD="${ENABLE_COS_UPLOAD:-0}"
-ENABLE_COS_SYNC="${ENABLE_COS_SYNC:-0}"
+ENABLE_COS_UPLOAD="${ENABLE_COS_UPLOAD:-1}"
+
 
 # 透传给 bin/run_daily_parquet_export_pipeline.sh：默认跳过 CSV 抽样对账；严格对账设 SKIP_RECONCILE=0
 SKIP_RECONCILE="${SKIP_RECONCILE:-1}"
