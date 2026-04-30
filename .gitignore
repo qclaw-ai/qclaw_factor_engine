@@ -220,3 +220,4 @@ __marimo__/
 *.zip
 lgb_factor_model.txt
 *.parquet
+others/

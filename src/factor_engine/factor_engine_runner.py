@@ -637,6 +637,22 @@ def _delta(x, n: int | None = None) -> pd.Series:
     return series.groupby(level="stock_code").diff(int(n))
 
 
+def _delay(x, n: int | None = None) -> pd.Series:
+    """时间序列平移，对应 alpha191 的 DELAY(A, n)"""
+    if n is None:
+        if isinstance(x, tuple) and len(x) == 2:
+            series, n = x
+        else:
+            raise TypeError("_delay 期望 (series, n) 或 (series, n) 形式的参数")
+    else:
+        series = x
+
+    if not isinstance(series, pd.Series):
+        raise TypeError("_delay 第一个参数必须是 pandas.Series")
+
+    return series.groupby(level="stock_code").shift(int(n))
+
+
 def _ts_sum(series: pd.Series, window: int) -> pd.Series:
     """时间序列滚动求和（按股票分组），对应 alpha191 的 TS_SUM"""
     summed = (
@@ -702,6 +718,44 @@ def _ts_rank(series: pd.Series, window: int) -> pd.Series:
     return out.reindex(series.index)
 
 
+def _ts_argmax(series: pd.Series, window: int) -> pd.Series:
+    """时间序列滚动最大值的位置（按股票分组），对应 alpha101 的 TS_ARGMAX"""
+    argmaxed = (
+        series.groupby(level="stock_code")
+        .rolling(window, min_periods=window)
+        .apply(np.argmax)
+        .reset_index(level=0, drop=True) + 1
+    )
+    return argmaxed.reindex(series.index)
+
+
+def _ts_argmin(series: pd.Series, window: int) -> pd.Series:
+    """时间序列滚动最小值的位置（按股票分组），对应 alpha101 的 TS_ARGMIN"""
+    argmined = (
+        series.groupby(level="stock_code")
+        .rolling(window, min_periods=window)
+        .apply(np.argmin)
+        .reset_index(level=0, drop=True) + 1
+    )
+    return argmined.reindex(series.index)
+
+
+def _ts_sign_power(series: pd.Series, window: int) -> pd.Series:
+    """时间序列滚动信号符号幂，对应 alpha101 的 SIGNEDPOWER"""
+    def _group_ts_sign_power(g: pd.Series) -> pd.Series:
+        return g.rolling(window, min_periods=window).apply(
+            lambda s: np.sign(s.iloc[-1]) * (np.abs(s.iloc[-1]) ** window),
+            raw=False,
+        )
+
+    sign_power = (
+        series.groupby(level="stock_code")
+        .apply(_group_ts_sign_power)
+        .reset_index(level=0, drop=True)
+    )
+    return sign_power.reindex(series.index)
+
+
 def _std(series: pd.Series, window: int | None = None) -> pd.Series:
     """时间序列滚动标准差（按股票分组），对应 alpha191 的 STD/STDDEV
 
@@ -710,17 +764,100 @@ def _std(series: pd.Series, window: int | None = None) -> pd.Series:
     """
     g = series.groupby(level="stock_code")
     if window is None:
-        return (
+        out = (
             g.expanding(min_periods=1)
             .std()
             .reset_index(level=0, drop=True)
         )
+        return out.reindex(series.index)
 
-    return (
+    out = (
         g.rolling(window, min_periods=window)
         .std()
         .reset_index(level=0, drop=True)
     )
+    return out.reindex(series.index)
+
+
+def _kurt(series: pd.Series, window: int | None = None) -> pd.Series:
+    """峰度：支持 rolling / expanding 两种模式"""
+    g = series.groupby(level="stock_code")
+    if window is None:
+        out = (
+            g.expanding(min_periods=1)
+            .kurt()
+            .reset_index(level=0, drop=True)
+        )
+        return out.reindex(series.index)
+
+    out = (
+        g.rolling(window, min_periods=window)
+        .kurt()
+        .reset_index(level=0, drop=True)
+    )
+    return out.reindex(series.index)
+
+
+def _skew(series: pd.Series, window: int | None = None) -> pd.Series:
+    """偏度：支持 rolling / expanding 两种模式"""
+    g = series.groupby(level="stock_code")
+    if window is None:
+        out = (
+            g.expanding(min_periods=1)
+            .skew()
+            .reset_index(level=0, drop=True)
+        )
+        return out.reindex(series.index)
+
+    out = (
+        g.rolling(window, min_periods=window)
+        .skew()
+        .reset_index(level=0, drop=True)
+    )
+    return out.reindex(series.index)
+
+
+def _var(series: pd.Series, window: int | None = None) -> pd.Series:
+    """方差：支持 rolling / expanding 两种模式"""
+    g = series.groupby(level="stock_code")
+    if window is None:
+        out = (
+            g.expanding(min_periods=1)
+            .var()
+            .reset_index(level=0, drop=True)
+        )
+        return out.reindex(series.index)
+
+    out = (
+        g.rolling(window, min_periods=window)
+        .var()
+        .reset_index(level=0, drop=True)
+    )
+    return out.reindex(series.index)
+
+
+def _median(series: pd.Series, window: int | None = None) -> pd.Series:
+    """中位数：支持 rolling / expanding 两种模式"""
+    g = series.groupby(level="stock_code")
+    if window is None:
+        out = (
+            g.expanding(min_periods=1)
+            .median()
+            .reset_index(level=0, drop=True)
+        )
+        return out.reindex(series.index)
+
+    out = (
+        g.rolling(window, min_periods=window)
+        .median()
+        .reset_index(level=0, drop=True)
+    )
+    return out.reindex(series.index)
+
+
+def _pct(series: pd.Series, window: int) -> pd.Series:
+    """滚动区间归一化到 [-1, 1]，对应 TS_PERCENT"""
+    return ((series - _ts_min(series, window)) / (_ts_max(series, window) - _ts_min(series, window)) - 0.5) * 2.0
 
 
 def _sum(series: pd.Series, window: int) -> pd.Series:
@@ -730,6 +867,10 @@ def _sum(series: pd.Series, window: int) -> pd.Series:
 
 def _abs(series: pd.Series) -> pd.Series:
     return series.abs()
+
+
+def _pct_change(series: pd.Series, window: int | None = 1) -> pd.Series:
+    return series.pct_change(int(window))
 
 
 def _sign(series: pd.Series) -> pd.Series:
@@ -825,6 +966,16 @@ def _if(cond, x, y):
     return pd.Series(out, index=idx)
 
 
+def _if_elif_else(cond, x, cond2, y, z):
+    """三元条件：if cond then x elif cond2 then y else z"""
+    return _if(cond, x, _if(cond2, y, z))
+
+
+def _if_elif_elif_else(cond, x, cond2, y, cond3, z, w):
+    """四元条件：if cond then x elif cond2 then y elif cond3 then z else w"""
+    return _if(cond, x, _if(cond2, y, _if(cond3, z, w)))
+
+
 def _rank(series: pd.Series) -> pd.Series:
     # 截面 rank，0-1 归一
     df = series.to_frame("v")
@@ -860,21 +1011,23 @@ def _covariance(x: pd.Series, y: pd.Series, window: int) -> pd.Series:
     def _cov_group(g: pd.DataFrame) -> pd.Series:
         return g["x"].rolling(window, min_periods=window).cov(g["y"])
 
-    return (
+    out = (
         df_xy.groupby(level="stock_code")
         .apply(_cov_group)
         .reset_index(level=0, drop=True)
     )
+    return out.reindex(x.index)
 
 
 def _prod(series: pd.Series, window: int) -> pd.Series:
     """时间序列滚动累乘，对应 alpha191 的 PROD(A, n)"""
-    return (
+    out = (
         series.groupby(level="stock_code")
         .rolling(window, min_periods=window)
         .apply(lambda s: np.prod(s.values), raw=False)
         .reset_index(level=0, drop=True)
     )
+    return out.reindex(series.index)
 
 
 def _count(cond: pd.Series, window: int) -> pd.Series:
@@ -888,11 +1041,11 @@ def _count(cond: pd.Series, window: int) -> pd.Series:
             .sum()
             .reset_index(level=0, drop=True)
         )
-        return out
+        return out.reindex(cond.index)
 
     # 标量条件：直接返回常数 Series，避免 'int' object has no attribute 'astype'
     val = float(bool(cond))
-    return pd.Series(val, index=pd.Index([], name="idx"))
+    return pd.Series(dtype=float)
 
 
 def _regbeta(a: pd.Series, b: pd.Series, window: int) -> pd.Series:
@@ -911,11 +1064,12 @@ def _regbeta(a: pd.Series, b: pd.Series, window: int) -> pd.Series:
         beta = cov / var.replace(0, np.nan)
         return beta
 
-    return (
+    out = (
         df_ab.groupby(level="stock_code")
         .apply(_beta_group)
         .reset_index(level=0, drop=True)
     )
+    return out.reindex(a.index)
 
 
 def _regresi(a: pd.Series, b: pd.Series, window: int) -> pd.Series:
@@ -956,28 +1110,43 @@ def _sumif(a: pd.Series, cond: pd.Series, window: int) -> pd.Series:
 
 
 def _wma(series: pd.Series, window: int) -> pd.Series:
-    """加权移动平均，对应 WMA(A, n)，权重 0.9^i（i 为距当前的滞后期）"""
-
-    weights = np.array([0.9 ** i for i in range(window)][::-1], dtype=float)
-    weights = weights / weights.sum()
-
-    def _wma_group(s: pd.Series) -> pd.Series:
-        def _wma_window(x: pd.Series) -> float:
-            # x 长度不足 window 时返回 NaN
-            if len(x) < window:
-                return np.nan
-            return float(np.dot(x.values, weights))
-
-        return (
-            s.rolling(window, min_periods=window)
-            .apply(_wma_window, raw=False)
-        )
-
-    return (
+    """加权移动平均：与 others/factor_base_func.py 的 WMA(A, n) 语义对齐。"""
+    out = (
         series.groupby(level="stock_code")
-        .apply(_wma_group)
+        .apply(lambda s: s.ewm(alpha=float(1 / window), ignore_na=True).mean())
         .reset_index(level=0, drop=True)
     )
+    return out.reindex(series.index)
+
+
+def _sma(series: pd.Series, n: int, m: int) -> pd.Series:
+    """加权移动平均：与 others/factor_base_func.py 的 SMA(A, n, m) 语义对齐。"""
+    out = (
+        series.groupby(level="stock_code")
+        .apply(lambda s: s.ewm(alpha=float(m / n), ignore_na=True).mean())
+        .reset_index(level=0, drop=True)
+    )
+    return out.reindex(series.index)
+
+
+def _hma(series: pd.Series, window: int) -> pd.Series:
+    """半衰期加权移动平均：与 others/factor_base_func.py 的 HMA(A, h) 语义对齐。"""
+    out = (
+        series.groupby(level="stock_code")
+        .apply(lambda s: s.ewm(halflife=int(window), ignore_na=True).mean())
+        .reset_index(level=0, drop=True)
+    )
+    return out.reindex(series.index)
+
+
+def _ema(series: pd.Series, period: int = 10) -> pd.Series:
+    """指数移动平均：与 others/factor_base_func.py 的 EMA(df, period) 语义对齐。"""
+    out = (
+        series.groupby(level="stock_code")
+        .apply(lambda s: s.ewm(span=int(period), ignore_na=True).mean())
+        .reset_index(level=0, drop=True)
+    )
+    return out.reindex(series.index)
 
 
 def _decaylinear(series: pd.Series, window: int) -> pd.Series:
@@ -997,11 +1166,12 @@ def _decaylinear(series: pd.Series, window: int) -> pd.Series:
             .apply(_decay_window, raw=False)
         )
 
-    return (
+    out = (
         series.groupby(level="stock_code")
         .apply(_decay_group)
         .reset_index(level=0, drop=True)
     )
+    return out.reindex(series.index)
 
 
 def _filter(a: pd.Series, cond: pd.Series) -> pd.Series:
@@ -1186,6 +1356,32 @@ def compute_factor_values(formula: str, price_df: pd.DataFrame) -> pd.Series:
         "HIGHDAY": _highday,
         "LOWDAY": _lowday,
         "SUMAC": _sumac,
+        "DELAY": _delay,
+        "TS_CORR": _corr,
+        "TS_STD": _std,
+        "TS_MEAN": _ma,
+        "TS_ARGMAX": _ts_argmax,
+        "TS_ARGMIN": _ts_argmin,
+        "SIGNEDPOWER": _ts_sign_power,
+        "TWO_CONDITION": _if,
+        "THREE_CONDITION": _if_elif_else,
+        "FOUR_CONDITION": _if_elif_elif_else,
+        "TS_SUMIF": _sumif,
+        "TS_COV": _covariance,
+        "TS_RANK_PERCENT": _ts_rank,
+        "TS_PROD": _prod,
+        "TS_COUNT": _count,
+        "TS_REGBETA": _regbeta,
+        "TS_KURT": _kurt,
+        "TS_SKEW": _skew,
+        "TS_VAR": _var,
+        "SMA": _sma,
+        "EMA": _ema,
+        "HMA": _hma,
+        "TS_MEDIAN": _median,
+        "TS_PERCENT": _pct,
+        "PCT_CHANGE": _pct_change,
+        "DECAY_LINEAR": _decaylinear,
 
         # 大小写都兼容 / 兼顾内部 DSL 与 alpha191 原始大小写
         "log": _log,
@@ -1228,6 +1424,12 @@ def compute_factor_values(formula: str, price_df: pd.DataFrame) -> pd.Series:
         "banchmarkindexclose": zeros_factor,
         "banchmarkindexopen": zeros_factor,
         "sequence": lambda n, s=seq_index: s,
+        "returns": ret,
+        "delay": _delay,
+        "ts_corr": _corr,
+        "ts_argmax": _ts_argmax,
+        "ts_argmin": _ts_argmin,
+        "four_condition": _if_elif_elif_else,
     }
 
     # 与 factor_dsl_allowlist 保持单一事实来源：locals 键集必须完全一致
