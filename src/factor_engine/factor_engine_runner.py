@@ -2,17 +2,19 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import concurrent.futures
 import os
 import sys
 from datetime import datetime, date
 import time
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Tuple
 from pathlib import Path
 
 import pandas as pd
 import numpy as np
 import jqdatasdk
 from sqlalchemy import bindparam, text
+from tqdm import tqdm
 
 # 对齐旧项目：把 common / factor_docs 加入路径
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -23,9 +25,47 @@ from common.stock_daily_log import log_stock_daily_banner
 from common.universe_service import normalize_universe_code, resolve_universe_for_jq
 from common.utils import setup_logger
 from factor_docs.factor_docs_parser import load_all_factors, FactorDefinition
-from factor_engine.factor_dsl_allowlist import assert_locals_dict_keys_match_allowlist
+from factor_engine.factor_dsl_allowlist import (
+    assert_locals_dict_keys_match_allowlist,
+    validate_factor_dsl_formula,
+)
 
 logger = setup_logger("factor_engine_runner", "logs/factor_engine_runner.log")
+
+# 进程池 worker 侧共享行情面板，避免每个任务重复传输同一份 price_df。
+_WORKER_PRICE_DF: Optional[pd.DataFrame] = None
+
+
+def _init_factor_compute_worker(price_df: pd.DataFrame) -> None:
+    """初始化进程池 worker 的只读行情面板。"""
+    global _WORKER_PRICE_DF
+    _WORKER_PRICE_DF = price_df
+
+
+def _compute_factor_processed_series_worker(task: Tuple[str, str, str]) -> Tuple[str, str, Optional[pd.Series], Optional[str], float]:
+    """
+    进程池 worker：执行单因子计算 + 标准化。
+
+    返回：
+    - factor_id / factor_name
+    - processed_series（成功时）
+    - error_message（失败时）
+    - elapsed_seconds
+    """
+    factor_id, factor_name, formula = task
+
+    if _WORKER_PRICE_DF is None:
+        return factor_id, factor_name, None, "worker 未初始化行情面板", 0.0
+
+    started = time.time()
+
+    try:
+        raw_series = compute_factor_values(formula, _WORKER_PRICE_DF)
+        processed_series = winsorize_and_standardize(raw_series)
+    except Exception as e:
+        return factor_id, factor_name, None, str(e), time.time() - started
+
+    return factor_id, factor_name, processed_series, None, time.time() - started
 
 
 def _auth_jq_if_configured(cfg: Config, config_file: str) -> None:
@@ -1406,7 +1446,22 @@ def run_factor_engine(
                 f"根据配置 skip_factor_ids 跳过 {skipped} 个因子: {sorted(skip_factor_ids)}"
             )
 
-    logger.info(f"本次将计算 {len(factors)} 个因子")
+    compute_workers_raw = str(
+        cfg.get("factor_engine", "compute_workers", fallback="0")
+    ).strip()
+    try:
+        compute_workers = int(compute_workers_raw) if compute_workers_raw else 0
+    except ValueError:
+        compute_workers = 0
+
+    if compute_workers <= 0:
+        compute_workers = min((os.cpu_count() or 1), 8)
+
+    logger.info(
+        "本次将计算 %s 个因子（仅多进程模式，compute_workers=%s）",
+        len(factors),
+        compute_workers,
+    )
 
     # 拉行情：非 ALL 时在 SQL 侧按股票池过滤，避免全市场进内存（见 _load_stock_daily）
     price_df = _load_stock_daily(
@@ -1425,6 +1480,8 @@ def run_factor_engine(
     project_root = Path(__file__).resolve().parents[2]
 
     try:
+        compute_factor_tasks: List[Tuple[str, str, str]] = []
+
         for factor in factors:
             logger.info(f"开始计算因子: {factor.factor_id} - {factor.factor_name}")
 
@@ -1482,12 +1539,94 @@ def run_factor_engine(
                             )
                         continue
 
+            # 计算前先做公式静态校验：仅将“可翻译”的公式送入并行计算队列。
             try:
-                raw_series = compute_factor_values(factor.formula, price_df)
-                processed_series = winsorize_and_standardize(raw_series)
+                validate_factor_dsl_formula(factor.formula)
             except Exception as e:
-                logger.error(f"计算因子 {factor.factor_id} 失败: {e}")
+                logger.error(
+                    "跳过因子：公式校验失败（factor_id=%s factor_name=%s err=%s）",
+                    factor.factor_id,
+                    factor.factor_name,
+                    e,
+                )
                 continue
+
+            compute_factor_tasks.append(
+                (factor.factor_id, factor.factor_name, factor.formula)
+            )
+
+        # 计算阶段：固定多进程，不再降级串行。
+        computed_result_map: dict = {}
+        compute_order_factor_ids: List[str] = [x[0] for x in compute_factor_tasks]
+
+        if compute_factor_tasks:
+            logger.info(
+                "开始多进程计算，共 %s 个任务，workers=%s",
+                len(compute_factor_tasks),
+                compute_workers,
+            )
+            try:
+                with concurrent.futures.ProcessPoolExecutor(
+                    max_workers=compute_workers,
+                    initializer=_init_factor_compute_worker,
+                    initargs=(price_df,),
+                ) as executor:
+                    future_map = {
+                        executor.submit(_compute_factor_processed_series_worker, task): task[0]
+                        for task in compute_factor_tasks
+                    }
+
+                    completed_count = 0
+                    total_count = len(future_map)
+
+                    # 终端用 tqdm 展示细粒度进度；日志文件则写里程碑进度，避免动态刷新字符污染日志。
+                    progress_iter = tqdm(
+                        concurrent.futures.as_completed(future_map),
+                        total=total_count,
+                        desc="factor compute",
+                        disable=not sys.stderr.isatty(),
+                    )
+
+                    for future in progress_iter:
+                        factor_id_ret, factor_name_ret, processed_series, error_message, elapsed = future.result()
+                        completed_count += 1
+
+                        if (completed_count % 20 == 0) or (completed_count == total_count):
+                            logger.info(
+                                "并行计算进度：%s/%s（%.1f%%）",
+                                completed_count,
+                                total_count,
+                                (completed_count / total_count) * 100.0,
+                            )
+
+                        if error_message:
+                            logger.error(
+                                "计算因子失败（并行）：factor_id=%s factor_name=%s elapsed=%.3fs err=%s",
+                                factor_id_ret,
+                                factor_name_ret,
+                                elapsed,
+                                error_message,
+                            )
+                            continue
+
+                        computed_result_map[factor_id_ret] = (factor_name_ret, processed_series)
+                        logger.info(
+                            "计算因子完成（并行）：factor_id=%s factor_name=%s elapsed=%.3fs",
+                            factor_id_ret,
+                            factor_name_ret,
+                            elapsed,
+                        )
+            except Exception as e:
+                logger.error(
+                    "多进程计算阶段异常，本批次不再串行回退。err=%s",
+                    e,
+                )
+
+        for factor_id in compute_order_factor_ids:
+            if factor_id not in computed_result_map:
+                continue
+
+            factor_name, processed_series = computed_result_map[factor_id]
 
             # 简单输出前几行结果用于检查
             df_out = processed_series.to_frame("factor_value").reset_index()
@@ -1498,7 +1637,7 @@ def run_factor_engine(
                 & (df_out["trade_date"] <= pd.Timestamp(end_date))
             ].copy()
             logger.info(
-                f"因子 {factor.factor_id} 样例数据（前5行）:\n"
+                f"因子 {factor_id} 样例数据（前5行）:\n"
                 f"{df_out.head().to_string(index=False)}"
             )
 
@@ -1512,11 +1651,11 @@ def run_factor_engine(
                     universe,
                     publish_iso,
                 )
-                csv_name = f"{factor.factor_id}.csv"
+                csv_name = f"{factor_id}.csv"
             else:
                 output_dir = os.path.join("factor_values", "by_universe", universe)
                 csv_name = (
-                    f"{factor.factor_id}_{universe}_{publish_start_date}_{end_date}.csv"
+                    f"{factor_id}_{universe}_{publish_start_date}_{end_date}.csv"
                     .replace(":", "")
                     .replace(" ", "")
                 )
@@ -1524,7 +1663,7 @@ def run_factor_engine(
             os.makedirs(output_dir, exist_ok=True)
             csv_path = os.path.join(output_dir, csv_name)
             df_out.to_csv(csv_path, index=False)
-            logger.info(f"因子 {factor.factor_id} 结果已导出到 CSV: {csv_path}")
+            logger.info(f"因子 {factor_id} 结果已导出到 CSV: {csv_path}")
 
             # 回写 factor_value_files（batch_csv / daily_csv）
             try:
@@ -1536,7 +1675,7 @@ def run_factor_engine(
                 if daily_csv_mode:
                     _upsert_factor_value_files_daily_csv(
                         session,
-                        factor_id=factor.factor_id,
+                        factor_id=factor_id,
                         universe=universe,
                         rel_path_posix=rel_path,
                         trade_date=publish_iso,
@@ -1544,8 +1683,8 @@ def run_factor_engine(
                 else:
                     _upsert_factor_value_file(
                         session,
-                        factor_id=factor.factor_id,
-                        factor_name=factor.factor_name,
+                        factor_id=factor_id,
+                        factor_name=factor_name,
                         universe=universe,
                         rel_path=rel_path,
                         date_start=publish_start_date,
@@ -1561,7 +1700,7 @@ def run_factor_engine(
             except Exception as e:
                 # 不中断主计算；记录错误供后续补写。
                 logger.error(
-                    f"写入 factor_value_files 失败，factor_id={factor.factor_id}, "
+                    f"写入 factor_value_files 失败，factor_id={factor_id}, "
                     f"universe={universe}, path={rel_path}, err={e}"
                 )
                 # 避免 session 落入 aborted 状态影响后续因子；这里显式回滚到干净状态。
