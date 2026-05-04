@@ -19,10 +19,13 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from common.config import Config
 from common.db import get_db_manager
-from common.factor_value_files_batch import batch_rel_path_to_abs, load_batch_csv_rel_paths
+from common.factor_value_files_batch import (
+    batch_rel_path_to_abs,
+    load_yearly_parquet_rel_paths_grouped_by_factor,
+)
 from common.universe_service import normalize_universe_code
 from common.utils import setup_logger
-from backtest_core.backtest_core_runner import _load_factor_csv
+from backtest_core.backtest_core_runner import _load_factor_long_from_parquet_paths
 
 
 logger = setup_logger("factor_corr_matrix", "logs/factor_corr_matrix.log")
@@ -50,114 +53,67 @@ def _load_valid_factor_ids(db_config_file: str) -> List[str]:
         session.close()
 
 
-def _find_batch_csv_by_directory_scan(
-    factor_output_dir: str,
-    factor_id: str,
-    test_universe: str,
-) -> str | None:
-    """兼容：在目录下按文件名 end 日期选「最新」CSV（同 end 时仅按扫描顺序，不推荐与多版本并存）。"""
-    if not os.path.isdir(factor_output_dir):
-        logger.warning(f"因子输出目录不存在: {factor_output_dir}")
-        return None
-
-    candidates: List[Tuple[datetime, str]] = []
-    u_tag = normalize_universe_code(test_universe)
-    prefix = f"{factor_id}_{u_tag}_"
-
-    for fname in os.listdir(factor_output_dir):
-        if not fname.lower().endswith(".csv"):
-            continue
-
-        name_no_ext = os.path.splitext(fname)[0]
-        if not name_no_ext.startswith(prefix):
-            continue
-
-        parts = name_no_ext.split("_")
-        if len(parts) < 4:
-            continue
-
-        try:
-            end_str = parts[-1]
-            end_dt = datetime.strptime(end_str, "%Y-%m-%d")
-        except Exception:
-            # 文件名不符合 `<factor_id>_<UNIVERSE>_<start>_<end>.csv` 约定时跳过
-            continue
-
-        full_path = os.path.join(factor_output_dir, fname)
-        candidates.append((end_dt, full_path))
-
-    if not candidates:
-        logger.warning(f"未在目录 {factor_output_dir} 下找到因子 {factor_id} 的 CSV 文件")
-        return None
-
-    candidates.sort(key=lambda x: x[0])
-    latest_path = candidates[-1][1]
-    logger.info(f"因子 {factor_id} 使用目录扫描选中的 CSV: {latest_path}")
-    return latest_path
-
-
 def _load_factor_series_for_window(
     config_file: str,
     project_root: str,
-    factor_output_dir: str,
     factor_ids: List[str],
     start_date: datetime,
     end_date: datetime,
     test_universe: str,
     use_factor_value_files: bool,
 ) -> Dict[str, pd.Series]:
-    """加载给定时间窗口内各因子的 factor_value 序列"""
+    """加载给定时间窗口内各因子的 factor_value 序列（仅 ``factor_value_files.yearly_parquet``）。"""
     series_map: Dict[str, pd.Series] = {}
 
     u_norm = normalize_universe_code(test_universe)
-    rel_map: Dict[str, str] = {}
-    if use_factor_value_files:
-        rel_map = load_batch_csv_rel_paths(
-            config_file=config_file,
-            universe=u_norm,
-            factor_ids=factor_ids,
+
+    if not use_factor_value_files:
+        logger.error(
+            "已移除目录 CSV 扫描：请将 factor_corr.use_factor_value_files=true，并登记 yearly_parquet"
         )
-        if not rel_map:
-            logger.warning(
-                "factor_value_files 未解析到任何 batch_csv（universe=%s），将无相关性输入",
-                u_norm,
-            )
+        return series_map
+
+    rel_map = load_yearly_parquet_rel_paths_grouped_by_factor(
+        config_file=config_file,
+        universe=u_norm,
+        factor_ids=factor_ids,
+    )
+
+    if not rel_map:
+        logger.warning(
+            "factor_value_files 未解析到任何 yearly_parquet（universe=%s），将无相关性输入",
+            u_norm,
+        )
 
     for fid in factor_ids:
-        if use_factor_value_files:
-            rel = rel_map.get(fid)
-            if not rel:
-                logger.warning(
-                    "factor_value_files 无该因子 batch_csv，跳过: factor_id=%s",
-                    fid,
-                )
-                continue
+        rel_list = rel_map.get(fid)
 
-            csv_path = batch_rel_path_to_abs(project_root, rel)
-            if not os.path.isfile(csv_path):
-                logger.warning(
-                    "因子 CSV 不存在（factor_value_files 指向路径无效）: factor_id=%s path=%s",
-                    fid,
-                    csv_path,
-                )
-                continue
-        else:
-            csv_path = _find_batch_csv_by_directory_scan(
-                factor_output_dir=factor_output_dir,
-                factor_id=fid,
-                test_universe=test_universe,
+        if not rel_list:
+            logger.warning(
+                "factor_value_files 无该因子 yearly_parquet，跳过: factor_id=%s",
+                fid,
             )
-            if not csv_path:
-                continue
+            continue
+
+        abs_paths = [batch_rel_path_to_abs(project_root, rel) for rel in rel_list]
+        missing = [p for p in abs_paths if not os.path.isfile(p)]
+
+        if missing:
+            logger.warning(
+                "因子 Parquet 不存在（factor_value_files 指向路径无效）: factor_id=%s missing=%s",
+                fid,
+                missing,
+            )
+            continue
 
         try:
-            df = _load_factor_csv(csv_path)
+            df = _load_factor_long_from_parquet_paths(abs_paths)
         except Exception as e:
-            logger.error(f"加载因子 CSV 失败, factor_id={fid}, path={csv_path}, err={e}")
+            logger.error(f"加载因子 Parquet 失败, factor_id={fid}, paths={abs_paths}, err={e}")
             continue
 
         if "factor_value" not in df.columns:
-            logger.warning(f"因子 CSV 缺少 factor_value 列, factor_id={fid}, path={csv_path}")
+            logger.warning(f"因子表缺少 factor_value 列, factor_id={fid}")
             continue
 
         s = df["factor_value"].copy()
@@ -350,12 +306,6 @@ def run_factor_corr_matrix(config_file: str = "config.ini") -> None:
     test_universe = normalize_universe_code(
         cfg.get("factor_corr", "test_universe", fallback="ALL")
     )
-    factor_output_root = cfg.get(
-        "factor_corr",
-        "factor_output_root",
-        fallback="factor_values/by_universe",
-    ).strip()
-    factor_output_dir = os.path.join(factor_output_root, test_universe)
     use_factor_value_files = cfg.getboolean(
         "factor_corr",
         "use_factor_value_files",
@@ -373,8 +323,8 @@ def run_factor_corr_matrix(config_file: str = "config.ini") -> None:
     logger.info(
         f"相关性计算窗口: {start_date.date()} ~ {as_of_date.date()}, "
         f"window_days={window_days}, min_overlap_days={min_overlap_days}, "
-        f"test_universe={test_universe}, use_factor_value_files={use_factor_value_files}, "
-        f"factor_output_dir={factor_output_dir}"
+        f"test_universe={test_universe}, use_factor_value_files={use_factor_value_files} "
+        f"(数据源: factor_value_files.yearly_parquet)"
     )
 
     # 1) 加载有效因子列表
@@ -403,7 +353,6 @@ def run_factor_corr_matrix(config_file: str = "config.ini") -> None:
     factor_series = _load_factor_series_for_window(
         config_file=config_file,
         project_root=project_root,
-        factor_output_dir=factor_output_dir,
         factor_ids=factor_ids,
         start_date=start_date,
         end_date=as_of_date,

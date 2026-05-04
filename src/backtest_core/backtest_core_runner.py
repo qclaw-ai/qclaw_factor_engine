@@ -15,7 +15,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from common.config import Config
 from common.db import get_db_manager
-from common.factor_value_files_batch import batch_rel_path_to_abs, load_batch_csv_rel_paths
+from common.factor_value_files_batch import (
+    batch_rel_path_to_abs,
+    load_yearly_parquet_rel_paths_grouped_by_factor,
+)
 from common.stock_daily_log import log_stock_daily_banner
 from common.universe_service import normalize_universe_code
 from common.utils import setup_logger
@@ -37,19 +40,32 @@ class BacktestResult:
     test_universe: str = "ALL"
 
 
-def _load_factor_csv(path: str) -> pd.DataFrame:
-    """加载 factor_engine 输出的 CSV，返回 MultiIndex DataFrame"""
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"因子 CSV 文件不存在: {path}")
+def _load_factor_long_from_parquet_paths(paths: List[str]) -> pd.DataFrame:
+    """加载若干年度 ``yearly_parquet`` 长表并纵向合并，返回 MultiIndex DataFrame。"""
+    if not paths:
+        raise ValueError("yearly_parquet 路径列表为空")
 
-    df = pd.read_csv(path)
-    df["trade_date"] = pd.to_datetime(df["trade_date"])
-    df = df.set_index(["trade_date", "stock_code"]).sort_index()
+    frames: List[pd.DataFrame] = []
 
-    if "factor_value" not in df.columns:
-        raise ValueError("因子 CSV 中缺少 factor_value 列")
+    for path in paths:
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"因子 Parquet 文件不存在: {path}")
 
-    return df
+        df = pd.read_parquet(path)
+
+        if "trade_date" not in df.columns and "date" in df.columns:
+            df = df.rename(columns={"date": "trade_date"})
+
+        if "factor_value" not in df.columns:
+            raise ValueError(f"因子 Parquet 缺少 factor_value 列: {path}")
+
+        frames.append(df[["trade_date", "stock_code", "factor_value"]])
+
+    merged = pd.concat(frames, ignore_index=True)
+    merged["trade_date"] = pd.to_datetime(merged["trade_date"])
+    merged = merged.set_index(["trade_date", "stock_code"]).sort_index()
+
+    return merged
 
 
 def _load_close_series(
@@ -258,52 +274,20 @@ def _compute_sharpe_maxdd(ret_series: pd.Series, horizon: int) -> Tuple[float, f
     return sharpe, max_dd
 
 
-def _extract_factor_id_from_csv_name(file_name: str, test_universe: str) -> Optional[str]:
-    """
-    从 CSV 文件名提取 factor_id（全域统一命名）：
-    - <factor_id>_<UNIVERSE>_<start>_<end>.csv
-    """
-    name_no_ext = os.path.splitext(file_name)[0]
-    parts = name_no_ext.split("_")
-    if len(parts) < 4:
-        return None
-
-    u = (test_universe or "ALL").strip().upper()
-    # 分域命名：最后三段是 <UNIVERSE>_<start>_<end>
-    if len(parts) >= 4 and parts[-3].upper() == u:
-        return "_".join(parts[:-3])
-    return None
-
-
-def _discover_csv_files(factor_output_dir: str, test_universe: str) -> Tuple[List[str], str]:
-    """
-    发现回测要使用的 CSV 文件（全域统一 by_universe，无兼容回退）。
-    返回：(文件名列表, 实际读取目录)
-    """
-    u = (test_universe or "ALL").strip().upper()
-    by_u_dir = os.path.join(factor_output_dir, "by_universe", u)
-
-    if not os.path.isdir(by_u_dir):
-        return [], by_u_dir
-
-    files = [f for f in os.listdir(by_u_dir) if f.lower().endswith(".csv")]
-    return files, by_u_dir
-
-
 def run_backtest_for_one(
     config_file: str,
     factor_id: str,
-    factor_csv_path: str,
+    factor_parquet_paths: List[str],
     horizon: int,
     n_quantiles: int,
     test_universe: str = "ALL",
 ) -> BacktestResult | None:
     logger.info(
         f"开始回测因子: {factor_id}, horizon={horizon}, "
-        f"n_quantiles={n_quantiles}, csv={factor_csv_path}"
+        f"n_quantiles={n_quantiles}, parquet_files={len(factor_parquet_paths)}"
     )
 
-    factor_df = _load_factor_csv(factor_csv_path)
+    factor_df = _load_factor_long_from_parquet_paths(factor_parquet_paths)
     factor_series = factor_df["factor_value"]
 
     # 推导回测时间区间
@@ -416,18 +400,19 @@ def run_backtest(
     results: List[BacktestResult] = []
 
     if use_factor_value_files:
-        # 与策略工厂一致：以 factor_value_files.batch_csv 为唯一选版来源（created_at 最新）。
+        # 以 factor_value_files.yearly_parquet 为来源（按年多文件在内存纵向合并）。
         project_root = str(Path(__file__).resolve().parents[2])
         u_norm = normalize_universe_code(test_universe)
         fid_filter = include_factor_ids if include_factor_ids else None
-        rel_map = load_batch_csv_rel_paths(
+        rel_map = load_yearly_parquet_rel_paths_grouped_by_factor(
             config_file=config_file,
             universe=u_norm,
             factor_ids=fid_filter,
         )
+
         if not rel_map:
             logger.error(
-                "factor_value_files 中无可用 batch_csv（universe=%s），请检查登记与 factor_ids",
+                "factor_value_files 中无可用 yearly_parquet（universe=%s），请检查登记与 factor_ids",
                 u_norm,
             )
             return []
@@ -436,24 +421,26 @@ def run_backtest(
             for fid in include_factor_ids:
                 if fid not in rel_map:
                     logger.warning(
-                        "factor_value_files 未找到该因子的 batch_csv：factor_id=%s",
+                        "factor_value_files 未找到该因子的 yearly_parquet：factor_id=%s",
                         fid,
                     )
 
         logger.info(
-            "本次回测使用 factor_value_files（batch_csv），universe=%s，因子数=%d",
+            "本次回测使用 factor_value_files（yearly_parquet），universe=%s，因子数=%d",
             u_norm,
             len(rel_map),
         )
 
         for factor_id in sorted(rel_map.keys()):
-            rel = rel_map[factor_id]
-            csv_path = batch_rel_path_to_abs(project_root, rel)
-            if not os.path.isfile(csv_path):
+            rel_list = rel_map[factor_id]
+            abs_paths = [batch_rel_path_to_abs(project_root, rel) for rel in rel_list]
+            missing = [p for p in abs_paths if not os.path.isfile(p)]
+
+            if missing:
                 logger.error(
-                    "因子 CSV 不存在（factor_value_files 指向路径无效）: factor_id=%s path=%s",
+                    "因子 Parquet 不存在（factor_value_files 指向路径无效）: factor_id=%s missing=%s",
                     factor_id,
-                    csv_path,
+                    missing,
                 )
                 continue
 
@@ -461,7 +448,7 @@ def run_backtest(
                 res = run_backtest_for_one(
                     config_file=config_file,
                     factor_id=factor_id,
-                    factor_csv_path=csv_path,
+                    factor_parquet_paths=abs_paths,
                     horizon=horizon,
                     n_quantiles=n_quantiles,
                     test_universe=test_universe,
@@ -474,49 +461,9 @@ def run_backtest(
         logger.info(f"本次共完成 {len(results)} 个因子的回测")
         return results
 
-    # 兼容：扫描目录下所有 CSV（同目录多份同名因子时可能重复回测）
-    if not os.path.isdir(factor_output_dir):
-        logger.error(f"因子输出目录不存在: {factor_output_dir}")
-        return []
-
-    csv_files, actual_dir = _discover_csv_files(
-        factor_output_dir=factor_output_dir,
-        test_universe=test_universe,
+    logger.error(
+        "已移除目录 CSV 扫描回测：请使用 use_factor_value_files=True，并确保 factor_value_files 已登记 yearly_parquet"
     )
-    if not csv_files:
-        logger.error(
-            f"目录 {actual_dir} 下未找到任何 CSV 文件（不再回退旧扁平 factor_values）"
-        )
-        return []
-    logger.info(f"本次回测读取目录（目录扫描模式）: {actual_dir}")
-
-    for file_name in csv_files:
-        factor_id = _extract_factor_id_from_csv_name(
-            file_name=file_name,
-            test_universe=test_universe,
-        )
-        if not factor_id:
-            logger.warning(f"文件名不符合约定，跳过: {file_name}")
-            continue
-        if include_factor_ids and factor_id not in include_factor_ids:
-            continue
-
-        csv_path = os.path.join(actual_dir, file_name)
-        try:
-            res = run_backtest_for_one(
-                config_file=config_file,
-                factor_id=factor_id,
-                factor_csv_path=csv_path,
-                horizon=horizon,
-                n_quantiles=n_quantiles,
-                test_universe=test_universe,
-            )
-            if res is not None:
-                results.append(res)
-        except Exception as e:
-            logger.error(f"回测因子 {factor_id} 失败: {e}")
-
-    logger.info(f"本次共完成 {len(results)} 个因子的回测")
     return results
 
 

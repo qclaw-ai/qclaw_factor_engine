@@ -43,7 +43,7 @@ LABEL_MAX_ROWS_PER_PART="${LABEL_MAX_ROWS_PER_PART:-500000}"
 
 STOP_ON_ERROR="${STOP_ON_ERROR:-1}"
 
-# factor 回填校验：`validate_factor_export.py` 的 CSV 抽样对账失败时可跳过（不传则做全量校验）
+# factor 回填校验：`validate_factor_export.py` 的 reconcile 步骤失败时可跳过（--skip-reconcile）
 SKIP_RECONCILE="${SKIP_RECONCILE:-1}"
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') - monthly parquet backfill 开始 universe=${UNIVERSE} months=${START_MONTH}..${END_MONTH} ENV=${ENV} SKIP_RECONCILE=${SKIP_RECONCILE}" >> "${LOG_FILE}"

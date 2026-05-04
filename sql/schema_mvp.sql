@@ -131,22 +131,28 @@ CREATE TABLE public.factor_value_files (
 	date_start date NULL,
 	date_end date NULL,
 	trade_date date NULL,
+	year int4 NULL,
 	created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	"comment" text NULL,
 	batch_id varchar(128) NULL,
+	last_batch_id varchar(128) NULL,
 	stage varchar(16) DEFAULT 'candidate'::character varying NOT NULL,
 	is_rebase bool DEFAULT false NOT NULL,
-	CONSTRAINT ck_factor_value_files_artifact_type CHECK (((artifact_type)::text = ANY ((ARRAY['batch_csv'::character varying, 'daily_csv'::character varying])::text[]))),
-	CONSTRAINT ck_factor_value_files_batch_fields CHECK ((((artifact_type)::text <> 'batch_csv'::text) OR ((date_start IS NOT NULL) AND (date_end IS NOT NULL) AND (trade_date IS NULL)))),
-	CONSTRAINT ck_factor_value_files_daily_fields CHECK ((((artifact_type)::text <> 'daily_csv'::text) OR ((trade_date IS NOT NULL) AND (date_start IS NULL) AND (date_end IS NULL)))),
+	CONSTRAINT ck_factor_value_files_artifact_type CHECK (((artifact_type)::text = ANY ((ARRAY['batch_csv'::character varying, 'daily_csv'::character varying, 'yearly_parquet'::character varying])::text[]))),
+	CONSTRAINT ck_factor_value_files_batch_fields CHECK ((((artifact_type)::text <> 'batch_csv'::text) OR ((date_start IS NOT NULL) AND (date_end IS NOT NULL) AND (trade_date IS NULL) AND (year IS NULL)))),
+	CONSTRAINT ck_factor_value_files_daily_fields CHECK ((((artifact_type)::text <> 'daily_csv'::text) OR ((trade_date IS NOT NULL) AND (date_start IS NULL) AND (date_end IS NULL) AND (year IS NULL)))),
+	CONSTRAINT ck_factor_value_files_yearly_fields CHECK ((((artifact_type)::text <> 'yearly_parquet'::text) OR ((year IS NOT NULL) AND (date_start IS NOT NULL) AND (date_end IS NOT NULL) AND (trade_date IS NULL) AND (date_start <= date_end) AND (EXTRACT(year FROM date_start) = (year)::numeric) AND (EXTRACT(year FROM date_end) = (year)::numeric)))),
 	CONSTRAINT ck_factor_value_files_stage CHECK (((stage)::text = ANY ((ARRAY['candidate'::character varying, 'production'::character varying, 'deprecated'::character varying])::text[]))),
 	CONSTRAINT factor_value_files_pkey PRIMARY KEY (id)
 );
 CREATE INDEX idx_factor_value_files_batch_stage_cov ON public.factor_value_files USING btree (factor_id, universe, artifact_type, stage, is_rebase, date_start, date_end, created_at DESC) WHERE ((artifact_type)::text = 'batch_csv'::text);
 CREATE INDEX idx_factor_value_files_factor_universe_type ON public.factor_value_files USING btree (factor_id, universe, artifact_type, created_at DESC);
+CREATE INDEX idx_factor_value_files_yearly_lookup ON public.factor_value_files USING btree (factor_id, universe, artifact_type, stage, year, updated_at DESC) WHERE ((artifact_type)::text = 'yearly_parquet'::text);
 CREATE INDEX idx_fvf_train_merge_lookup ON public.factor_value_files USING btree (factor_id, universe, artifact_type, is_rebase, created_at DESC, id DESC, date_start, date_end) WHERE ((artifact_type)::text = 'batch_csv'::text);
 CREATE UNIQUE INDEX uq_factor_value_files_batch ON public.factor_value_files USING btree (factor_id, universe, artifact_type, date_start, date_end) WHERE ((artifact_type)::text = 'batch_csv'::text);
 CREATE UNIQUE INDEX uq_factor_value_files_daily ON public.factor_value_files USING btree (factor_id, universe, artifact_type, trade_date) WHERE ((artifact_type)::text = 'daily_csv'::text);
+CREATE UNIQUE INDEX uq_factor_value_files_yearly ON public.factor_value_files USING btree (factor_id, universe, artifact_type, year) WHERE ((artifact_type)::text = 'yearly_parquet'::text);
 
 
 -- public.factor_value_files foreign keys

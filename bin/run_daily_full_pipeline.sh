@@ -24,6 +24,9 @@ export PYTHONPATH="${PROJECT_ROOT}/src"
 ENV="${ENV:-prod}"
 export ENV
 
+CONFIG_FILE="${CONFIG_FILE:-config.ini}"
+export CONFIG_FILE
+
 # Miniconda Python（cron 下 PATH 常不含 python；可用环境变量 PYTHON_BIN 覆盖）
 PYTHON_BIN="${PYTHON_BIN:-/home/ubuntu/miniconda3/bin/python}"
 export PYTHON_BIN
@@ -43,7 +46,7 @@ TRADE_DATE="${1:-$(date +%F)}"
 ENABLE_COS_UPLOAD="${ENABLE_COS_UPLOAD:-1}"
 
 
-# 透传给 bin/run_daily_parquet_export_pipeline.sh：默认跳过 CSV 抽样对账；严格对账设 SKIP_RECONCILE=0
+# 透传给 bin/run_daily_parquet_export_pipeline.sh：默认跳过 validate reconcile；严格对账设 SKIP_RECONCILE=0
 SKIP_RECONCILE="${SKIP_RECONCILE:-1}"
 export SKIP_RECONCILE
 
@@ -51,7 +54,7 @@ echo "$(date '+%Y-%m-%d %H:%M:%S') - daily full pipeline 开始, T=${TRADE_DATE}
 
 set +e
 
-# 1) 日内因子 pipeline（含行情+calendar同步 + 日更因子 + 可选 rsync 发布）
+# 1) 日内因子 pipeline（行情+calendar + 日更 bundle + daily→yearly merge，见 run_daily_factor_pipeline.sh）
 #
 # 注意：该脚本内部日志写到自己的 daily_factor_pipeline_*.log；这里也保留一份汇总日志
 bin/run_daily_factor_pipeline.sh "${TRADE_DATE}" >> "${LOG_FILE}" 2>&1

@@ -4,7 +4,7 @@ set -euo pipefail
 
 # 每天：对外 Parquet 导出（factor + label）+ 校验
 # - 默认导出“当月”（month=YYYY-MM，取当前日期）
-# - 可选启用 factor include-daily patch（需已有 daily_csv）
+# - 可选启用 factor include-daily patch（读 factor_values_parquet/daily/.../factors.parquet 等，见 factor_export_runner）
 # - 仅在导出成功后才继续校验，避免刷出误导性 PASS
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -25,12 +25,14 @@ PYTHON_BIN="${PYTHON_BIN:-/home/ubuntu/miniconda3/bin/python}"
 ENV="${ENV:-prod}"
 export ENV
 
+CONFIG_FILE="${CONFIG_FILE:-config.ini}"
+
 UNIVERSE="${UNIVERSE:-ZZ500}"
 MONTH="${MONTH:-$(date +%Y-%m)}"
 STAGE="${STAGE:-candidate}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-artifacts/factor_export_parquet}"
 
-# factor 是否启用 include-daily patch（默认关闭）
+# factor 是否启用 include-daily patch（默认开启；与当日/近日 daily bundle 合并进宽表）
 INCLUDE_DAILY="${INCLUDE_DAILY:-1}"
 DAILY_RECENT_DAYS="${DAILY_RECENT_DAYS:-15}"
 FACTOR_BATCH_SIZE="${FACTOR_BATCH_SIZE:-50}"
@@ -42,10 +44,10 @@ LABEL_MAX_ROWS_PER_PART="${LABEL_MAX_ROWS_PER_PART:-500000}"
 
 SKIP_VALIDATE="${SKIP_VALIDATE:-0}"
 
-# validate_factor_export：默认跳过 CSV 抽样对账；需要严格对账时设 SKIP_RECONCILE=0（与 monthly 回填语义一致）
+# validate_factor_export：默认跳过 reconcile；需要严格对账时设 SKIP_RECONCILE=0（与 monthly 回填语义一致）
 SKIP_RECONCILE="${SKIP_RECONCILE:-1}"
 
-echo "$(date '+%Y-%m-%d %H:%M:%S') - daily parquet export pipeline 开始, universe=${UNIVERSE}, month=${MONTH}, stage=${STAGE}, ENV=${ENV}" >> "${LOG_FILE}"
+echo "$(date '+%Y-%m-%d %H:%M:%S') - daily parquet export pipeline 开始, universe=${UNIVERSE}, month=${MONTH}, stage=${STAGE}, ENV=${ENV}, config=${CONFIG_FILE}" >> "${LOG_FILE}"
 echo "$(date '+%Y-%m-%d %H:%M:%S') - output_root=${OUTPUT_ROOT}, include_daily=${INCLUDE_DAILY}, daily_recent_days=${DAILY_RECENT_DAYS}, skip_validate=${SKIP_VALIDATE}, skip_reconcile=${SKIP_RECONCILE}" >> "${LOG_FILE}"
 
 set +e
@@ -53,7 +55,7 @@ set +e
 # 1) factor export
 cmd_factor=(
   "${PYTHON_BIN}" src/factor_export_cos/factor_export_runner.py
-  --config config.ini
+  --config "${CONFIG_FILE}"
   --universe "${UNIVERSE}"
   --month "${MONTH}"
   --stage "${STAGE}"
@@ -72,7 +74,7 @@ EXIT_CODE=$?
 if [ ${EXIT_CODE} -eq 0 ]; then
   cmd_label=(
     "${PYTHON_BIN}" -m factor_export_cos.label_export_runner
-    --config config.ini
+    --config "${CONFIG_FILE}"
     --universe "${UNIVERSE}"
     --month "${MONTH}"
     --sql-end-buffer-days "${LABEL_SQL_END_BUFFER_DAYS}"

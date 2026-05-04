@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-# 每周：因子增量编排（factor_incremental_runner -> factor_engine 计算 batch_csv）
+# 每周：因子增量编排（factor_incremental_runner -> factor_engine，主产物 yearly_parquet）
 #
 # 默认行为：
 # - CONFIG_FILE=config.ini（由 common.Config 根据 ENV 自动切换 *_dev.ini）

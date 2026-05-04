@@ -3,14 +3,16 @@
 
 import argparse
 import concurrent.futures
+import json
 import os
 import sys
 from datetime import datetime, date
 import time
-from typing import List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 from pathlib import Path
 
 import pandas as pd
+import polars as pl
 import numpy as np
 import jqdatasdk
 from sqlalchemy import bindparam, text
@@ -138,51 +140,363 @@ def _filter_price_df_by_universe(
     raise ValueError(f"不支持的 factor_engine.universe={u}")
 
 
-def _upsert_factor_value_file(
+def _iter_calendar_years_in_range(d0: date, d1: date) -> List[int]:
+    """闭区间 [d0, d1] 内涉及的所有日历年（升序）。"""
+    if d0 > d1:
+        return []
+    years: List[int] = []
+    y = d0.year
+    while y <= d1.year:
+        years.append(y)
+        y += 1
+    return years
+
+
+def _trade_date_end_required_for_year(year: int, pub_end: date) -> date:
+    """本任务在日历 year 内需要覆盖到的最晚交易日：min(pub_end, year-12-31)。"""
+    y_end = date(year, 12, 31)
+    return pub_end if pub_end <= y_end else y_end
+
+
+def _trade_date_start_required_for_year(year: int, pub_start: date) -> date:
+    """本任务在日历 year 内需要覆盖到的最早交易日：max(pub_start, year-01-01)。"""
+    y_begin = date(year, 1, 1)
+    return pub_start if pub_start >= y_begin else y_begin
+
+
+def _yearly_publish_trading_bounds_by_year(
+    session,
+    *,
+    pub_start: date,
+    pub_end: date,
+) -> Dict[int, Tuple[date, date]]:
+    """
+    将 publish 在各自然年内的日历闭区间，映射为 stock_daily 中实际存在的首尾交易日。
+
+    用于 yearly 跳过判定：因子文件 date_start/date_end 来自行情上的实际 trade_date，
+    若用纯日历日与首个交易日比较，会导致「同任务连跑两遍永不跳过」的假阴性。
+    """
+    out: Dict[int, Tuple[date, date]] = {}
+    years = _iter_calendar_years_in_range(pub_start, pub_end)
+    for y in years:
+        cal_s = _trade_date_start_required_for_year(y, pub_start)
+        cal_e = _trade_date_end_required_for_year(y, pub_end)
+        row = session.execute(
+            text(
+                """
+                SELECT MIN(trade_date) AS mn, MAX(trade_date) AS mx
+                FROM stock_daily
+                WHERE trade_date BETWEEN :cal_s AND :cal_e
+                """
+            ),
+            {"cal_s": cal_s, "cal_e": cal_e},
+        ).mappings().first()
+        if not row or row["mn"] is None or row["mx"] is None:
+            out[y] = (cal_s, cal_e)
+            continue
+        mn_raw, mx_raw = row["mn"], row["mx"]
+        if isinstance(mn_raw, date):
+            mn_d = mn_raw
+        else:
+            mn_d = date.fromisoformat(str(mn_raw)[:10])
+        if isinstance(mx_raw, date):
+            mx_d = mx_raw
+        else:
+            mx_d = date.fromisoformat(str(mx_raw)[:10])
+        out[y] = (mn_d, mx_d)
+    return out
+
+
+def _yearly_parquet_publish_range_fully_covered(
+    session,
+    *,
+    factor_id: str,
+    universe: str,
+    pub_start: date,
+    pub_end: date,
+    trading_bounds_by_year: Optional[Dict[int, Tuple[date, date]]] = None,
+) -> bool:
+    """
+    yearly_parquet 幂等跳过：publish 区间内每个日历年均已登记，且索引行的
+    ``date_start`` / ``date_end`` 分别盖住该年在 publish 窗口内的需求区间。
+
+    若传入 ``trading_bounds_by_year``，则需求区间为该年内 **首个/最后一个有行情的交易日**
+    （与 parquet 中 trade_date 语义一致）；否则退化为日历日上下界（易误判，不推荐）。
+
+    不按 stage 过滤（同因子同年唯一索引只有一行）。
+    """
+    years = _iter_calendar_years_in_range(pub_start, pub_end)
+    if not years:
+        return False
+
+    for y in years:
+        if trading_bounds_by_year is not None and y in trading_bounds_by_year:
+            need_start, need_end = trading_bounds_by_year[y]
+        else:
+            need_start = _trade_date_start_required_for_year(y, pub_start)
+            need_end = _trade_date_end_required_for_year(y, pub_end)
+        row = session.execute(
+            text(
+                """
+                SELECT date_start, date_end
+                FROM factor_value_files
+                WHERE factor_id = :factor_id
+                  AND universe = :universe
+                  AND artifact_type = 'yearly_parquet'
+                  AND year = :year
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            ),
+            {"factor_id": factor_id, "universe": universe, "year": y},
+        ).fetchone()
+        if row is None or row[0] is None or row[1] is None:
+            return False
+        raw_ds, raw_de = row[0], row[1]
+        if isinstance(raw_ds, date):
+            ds_d = raw_ds
+        else:
+            ds_d = date.fromisoformat(str(raw_ds)[:10])
+        if isinstance(raw_de, date):
+            de_d = raw_de
+        else:
+            de_d = date.fromisoformat(str(raw_de)[:10])
+        # 索引区间必须覆盖本任务在该年内的需求闭区间 [need_start, need_end]
+        if ds_d > need_start or de_d < need_end:
+            return False
+    return True
+
+
+def _daily_parquet_bundle_path(project_root: Path, universe: str, publish_iso: str) -> Path:
+    """日更多因子单文件：factor_values_parquet/daily/by_universe/{universe}/{T}/factors.parquet"""
+    return (
+        project_root
+        / "factor_values_parquet"
+        / "daily"
+        / "by_universe"
+        / universe
+        / publish_iso
+        / "factors.parquet"
+    )
+
+
+def _write_daily_parquet_bundle_and_manifest(
+    *,
+    project_root: Path,
+    universe: str,
+    publish_iso: str,
+    parts: List[pl.DataFrame],
+    batch_id: str,
+) -> None:
+    """
+    合并各因子长表片段，写 factors.parquet + manifest.json（阶段 2 日更产物）。
+
+    列：trade_date, stock_code, factor_id, factor_value
+    """
+    if not parts:
+        logger.warning(
+            "daily parquet bundle：无片段可写，跳过 factors.parquet universe=%s trade_date=%s",
+            universe,
+            publish_iso,
+        )
+        return
+
+    out_dir = _daily_parquet_bundle_path(project_root, universe, publish_iso).parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+    merged = pl.concat(parts, how="vertical")
+    merged = merged.sort(["factor_id", "trade_date", "stock_code"])
+    pq_path = out_dir / "factors.parquet"
+    merged.write_parquet(str(pq_path), compression="zstd")
+
+    try:
+        rel_pq = pq_path.resolve().relative_to(project_root.resolve()).as_posix()
+    except ValueError:
+        rel_pq = pq_path.resolve().as_posix()
+
+    now_s = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    manifest = {
+        "schema_version": "v1",
+        "kind": "daily_factors_parquet_bundle",
+        "trade_date": publish_iso,
+        "universe": universe,
+        "batch_id": batch_id,
+        "factor_count": int(merged["factor_id"].n_unique()),
+        "row_count": int(merged.height),
+        "parquet_rel_path": rel_pq,
+        "generated_at": now_s,
+    }
+    mf_path = out_dir / "manifest.json"
+    with open(mf_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
+
+    logger.info(
+        "daily parquet bundle 已写入 universe=%s trade_date=%s factors=%s rows=%s parquet=%s manifest=%s",
+        universe,
+        publish_iso,
+        manifest["factor_count"],
+        manifest["row_count"],
+        pq_path,
+        mf_path,
+    )
+
+
+def _merge_write_yearly_parquet_long(
+    *,
+    project_root: Path,
+    universe: str,
+    factor_id: str,
+    year: int,
+    df_new: pd.DataFrame,
+) -> Tuple[str, date, date]:
+    """
+    将 df_new（列含 trade_date, stock_code, factor_value）合并写入年度长表 Parquet。
+
+    - 路径：factor_values_parquet/yearly/by_universe/{universe}/{factor_id}/{factor_id}-{year}.parquet
+    - 若仅存在历史扁平路径 ``.../{universe}/{factor_id}-{year}.parquet``，会读入合并后写入新路径并删除旧文件。
+    - 同键 (trade_date, stock_code) 后写覆盖先写（与 daily 回补语义一致）。
+    - 返回 (rel_path_posix, date_start, date_end) 为该年合并后的实际区间。
+    """
+    universe_dir = (
+        project_root
+        / "factor_values_parquet"
+        / "yearly"
+        / "by_universe"
+        / universe
+    )
+    factor_dir = universe_dir / factor_id
+    fname = f"{factor_id}-{year}.parquet"
+    abs_path = factor_dir / fname
+    # 阶段1 旧布局：parquet 直接落在 universe 目录下（无 factor_id 子目录）
+    legacy_flat_path = universe_dir / fname
+
+    factor_dir.mkdir(parents=True, exist_ok=True)
+
+    new_pl = pl.from_pandas(df_new[["trade_date", "stock_code", "factor_value"]])
+    new_pl = new_pl.with_columns(
+        [
+            pl.col("trade_date").cast(pl.Date),
+            pl.col("stock_code").cast(pl.Utf8),
+            pl.col("factor_value").cast(pl.Float64),
+        ]
+    )
+
+    legacy_read_path: Optional[Path] = None
+    old_pl: Optional[pl.DataFrame] = None
+
+    if abs_path.exists():
+        try:
+            old_pl = pl.read_parquet(str(abs_path))
+        except Exception as e:
+            logger.warning(
+                "读取既有 yearly parquet 失败，将仅写入本批新数据 path=%s err=%s",
+                abs_path,
+                e,
+            )
+            old_pl = None
+    elif legacy_flat_path.exists():
+        try:
+            old_pl = pl.read_parquet(str(legacy_flat_path))
+            legacy_read_path = legacy_flat_path
+        except Exception as e:
+            logger.warning(
+                "读取既有 yearly parquet（旧扁平路径）失败，将仅写入本批新数据 path=%s err=%s",
+                legacy_flat_path,
+                e,
+            )
+            old_pl = None
+
+    if old_pl is not None and old_pl.height > 0:
+        # 兼容历史列名 / 类型
+        cols = set(old_pl.columns)
+        if "trade_date" not in cols and "date" in cols:
+            old_pl = old_pl.rename({"date": "trade_date"})
+        old_pl = old_pl.select(
+            [
+                pl.col("trade_date").cast(pl.Date).alias("trade_date"),
+                pl.col("stock_code").cast(pl.Utf8).alias("stock_code"),
+                pl.col("factor_value").cast(pl.Float64).alias("factor_value"),
+            ]
+        )
+        merged = pl.concat([old_pl, new_pl], how="vertical")
+    else:
+        merged = new_pl
+
+    merged = merged.sort(["trade_date", "stock_code"])
+    merged = merged.unique(subset=["trade_date", "stock_code"], keep="last")
+
+    if merged.height == 0:
+        raise ValueError(f"yearly parquet 合并结果为空 factor_id={factor_id} year={year}")
+
+    merged.write_parquet(str(abs_path), compression="zstd")
+
+    # 已从旧路径读入并写入新路径时，删除扁平文件，避免磁盘双份与 rel_path 漂移
+    if legacy_read_path is not None and legacy_read_path.is_file():
+        try:
+            legacy_read_path.unlink()
+            logger.info(
+                "已迁移 yearly parquet 至 factor 子目录并删除旧文件 old=%s new=%s",
+                legacy_read_path,
+                abs_path,
+            )
+        except OSError as e:
+            logger.warning(
+                "删除旧扁平 yearly parquet 失败（可手工删）path=%s err=%s",
+                legacy_read_path,
+                e,
+            )
+
+    ds = merged.select(pl.col("trade_date").min()).to_series()[0]
+    de = merged.select(pl.col("trade_date").max()).to_series()[0]
+    if not isinstance(ds, date):
+        ds = date.fromisoformat(str(ds)[:10])
+    if not isinstance(de, date):
+        de = date.fromisoformat(str(de)[:10])
+
+    try:
+        rel = abs_path.resolve().relative_to(project_root.resolve()).as_posix()
+    except ValueError:
+        rel = abs_path.resolve().as_posix()
+
+    return rel, ds, de
+
+
+def _upsert_factor_value_file_yearly_parquet(
     session,
     *,
     factor_id: str,
     factor_name: str,
     universe: str,
     rel_path: str,
-    date_start: str,
-    date_end: str,
+    year: int,
+    date_start: date,
+    date_end: date,
     batch_id: str,
     stage: str,
     is_rebase: bool,
 ) -> None:
     """
-    写入/更新 factor_value_files（artifact_type=batch_csv）。
+    写入/更新 factor_value_files（artifact_type=yearly_parquet），单行覆盖 (factor_id, universe, year)。
 
-    说明：
-    - 唯一键：factor_id + universe + artifact_type + date_start + date_end
-    - 路径统一存相对仓库根 POSIX 路径
+    先 UPDATE 再 INSERT，并用 SAVEPOINT 隔离失败。
     """
-    # 统一转 date，避免 SQL 里做类型强转导致方言差异问题。
-    ds = date.fromisoformat(date_start)
-    de = date.fromisoformat(date_end)
-
     params = {
         "factor_id": factor_id,
         "universe": universe,
         "rel_path": rel_path,
-        "date_start": ds,
-        "date_end": de,
+        "year": int(year),
+        "date_start": date_start,
+        "date_end": date_end,
         "batch_id": batch_id,
+        "last_batch_id": batch_id,
         "stage": stage,
         "is_rebase": is_rebase,
         "comment": (
-            "generated by factor_engine_runner "
-            f"universe={universe} batch_id={batch_id} stage={stage} is_rebase={is_rebase}"
+            "generated by factor_engine_runner yearly_parquet "
+            f"universe={universe} year={year} batch_id={batch_id} stage={stage} is_rebase={is_rebase}"
         ),
     }
 
-    # 先更新已存在记录。这样不依赖 ON CONFLICT 推断部分唯一索引（WHERE artifact_type='batch_csv'）。
-    # 每次 upsert 用 SAVEPOINT 隔离失败，避免一个因子写库失败导致整个 session 进入 aborted。
-    # 并且把 factor_basic 的最小 upsert 放在同一个 SAVEPOINT 内，确保外键检查在同一事务视图内可见。
     with session.begin_nested():
-        # 先保证 factor_basic 存在，否则插 factor_value_files 会被外键拒绝并导致事务进入 aborted。
-        # 这里做最小 upsert：只写必填字段 factor_id / factor_name，其余字段后续可由 pipeline 补齐。
         session.execute(
             text(
                 """
@@ -208,16 +522,18 @@ def _upsert_factor_value_file(
                 UPDATE factor_value_files
                 SET
                     rel_path = :rel_path,
+                    date_start = :date_start,
+                    date_end = :date_end,
                     batch_id = :batch_id,
+                    last_batch_id = :last_batch_id,
                     stage = :stage,
                     is_rebase = :is_rebase,
-                    created_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP,
                     comment = :comment
                 WHERE factor_id = :factor_id
                   AND universe = :universe
-                  AND artifact_type = 'batch_csv'
-                  AND date_start = :date_start
-                  AND date_end = :date_end
+                  AND artifact_type = 'yearly_parquet'
+                  AND year = :year
                 """
             ),
             params,
@@ -225,7 +541,6 @@ def _upsert_factor_value_file(
         if updated.rowcount and updated.rowcount > 0:
             return
 
-        # 未命中更新时再插入新行。
         session.execute(
             text(
                 """
@@ -237,22 +552,28 @@ def _upsert_factor_value_file(
                     date_start,
                     date_end,
                     trade_date,
+                    year,
                     batch_id,
+                    last_batch_id,
                     stage,
                     is_rebase,
                     created_at,
+                    updated_at,
                     comment
                 ) VALUES (
                     :factor_id,
                     :universe,
-                    'batch_csv',
+                    'yearly_parquet',
                     :rel_path,
                     :date_start,
                     :date_end,
                     NULL,
+                    :year,
                     :batch_id,
+                    :last_batch_id,
                     :stage,
                     :is_rebase,
+                    CURRENT_TIMESTAMP,
                     CURRENT_TIMESTAMP,
                     :comment
                 )
@@ -260,142 +581,6 @@ def _upsert_factor_value_file(
             ),
             params,
         )
-
-
-def _factor_value_files_batch_csv_ids_for_job_key(
-    session,
-    *,
-    factor_id: str,
-    universe: str,
-    date_start: date,
-    date_end: date,
-) -> List[int]:
-    """
-    按 batch_csv 写入键查询 factor_value_files 行 id。
-
-    - 应与 _upsert_factor_value_file / 落库的 date_start、date_end 一致。
-    - UNIQUE 索引下常为 0/1 行；若为多行则说明数据异常。
-    """
-    rows = session.execute(
-        text(
-            """
-            SELECT id
-            FROM factor_value_files
-            WHERE factor_id = :factor_id
-              AND universe = :universe
-              AND artifact_type = 'batch_csv'
-              AND date_start = :date_start
-              AND date_end = :date_end
-            ORDER BY id ASC
-            """
-        ),
-        {
-            "factor_id": factor_id,
-            "universe": universe,
-            "date_start": date_start,
-            "date_end": date_end,
-        },
-    ).fetchall()
-    return [int(r[0]) for r in rows]
-
-
-def _factor_value_files_daily_csv_ids_for_trade_date(
-    session,
-    *,
-    factor_id: str,
-    universe: str,
-    trade_date: date,
-) -> List[int]:
-    """按 daily_csv + trade_date 查询 factor_value_files 行 id（与 daily_factor_values_runner 自然键对齐）。"""
-    rows = session.execute(
-        text(
-            """
-            SELECT id
-            FROM factor_value_files
-            WHERE factor_id = :factor_id
-              AND universe = :universe
-              AND artifact_type = 'daily_csv'
-              AND trade_date = :trade_date
-            ORDER BY id ASC
-            """
-        ),
-        {
-            "factor_id": factor_id,
-            "universe": universe,
-            "trade_date": trade_date,
-        },
-    ).fetchall()
-    return [int(r[0]) for r in rows]
-
-
-def _upsert_factor_value_files_daily_csv(
-    session,
-    *,
-    factor_id: str,
-    universe: str,
-    rel_path_posix: str,
-    trade_date: str,
-) -> None:
-    """
-    真分域日更登记：写 factor_value_files（daily_csv）。
-    与 daily_factor_values_runner._upsert_factor_value_files_daily SQL 对齐，避免两处语义分叉。
-    """
-    td = trade_date.strip()[:10]
-
-    updated = session.execute(
-        text(
-            """
-            UPDATE factor_value_files
-            SET rel_path = :rel_path,
-                trade_date = :trade_date_td,
-                date_start = NULL,
-                date_end = NULL,
-                created_at = CURRENT_TIMESTAMP
-            WHERE factor_id = :factor_id
-              AND universe = :universe
-              AND artifact_type = 'daily_csv'
-              AND trade_date = :trade_date_td
-            """
-        ),
-        {
-            "factor_id": factor_id,
-            "universe": universe,
-            "rel_path": rel_path_posix,
-            "trade_date_td": td,
-        },
-    )
-
-    if int(getattr(updated, "rowcount", 0) or 0) > 0:
-        return
-
-    session.execute(
-        text(
-            """
-            INSERT INTO factor_value_files (
-                factor_id,
-                universe,
-                artifact_type,
-                rel_path,
-                trade_date,
-                created_at
-            )
-            VALUES (
-                :factor_id,
-                :universe,
-                'daily_csv',
-                :rel_path,
-                :trade_date_td,
-                CURRENT_TIMESTAMP
-            )
-            """
-        ),
-        {
-            "factor_id": factor_id,
-            "universe": universe,
-            "rel_path": rel_path_posix,
-            "trade_date_td": td,
-        },
-    )
 
 
 def _load_stock_daily(
@@ -1448,6 +1633,10 @@ def winsorize_and_standardize(series: pd.Series) -> pd.Series:
     - 去极值：按当日截面 1%–99% 分位数剪裁
     - 标准化：按当日截面 Z-score
     """
+    # 顶层比较（如 RANK(a)<RANK(b)）得到 bool；去极值 / Z-score 需对浮点做减法，否则触发 numpy boolean subtract
+    if pd.api.types.is_bool_dtype(series):
+        series = series.astype("float64")
+
     df = series.to_frame("factor_value").copy()
 
     # 截面去极值
@@ -1505,24 +1694,25 @@ def run_factor_engine(
     # - universe_override 为 None：从配置文件读取；非 None 则经 normalize 后使用，并忽略 ini 的 universe。
     factor_ids_override: Optional[Sequence[str]] = None,
     universe_override: Optional[str] = None,
-    # skip_if_batch_csv_record_exists_override：None 读 ini；True/False 显式覆盖 skip_if_batch_csv_record_exists。
-    skip_if_batch_csv_record_exists_override: Optional[bool] = None,
-    # daily_csv_mode：日更语义，CSV 写入 factor_values/daily/by_universe/... ，factor_value_files.artifact_type=daily_csv，
-    # 与同仓库 factor_export_cos 中 daily_override_batch 对齐。要求 publish_start_date 与 end_date 同一天；
-    # start_date 可更早（回看/warmup），与 incremental 单笔单日任务一致。
+    # skip_if_artifact_record_exists_override：None 读 ini；True/False 显式覆盖 skip_if_artifact_record_exists。
+    skip_if_artifact_record_exists_override: Optional[bool] = None,
+    # daily_csv_mode：单日任务语义；主产物为 ``factors.parquet`` bundle，不再写逐因子 CSV。
+    # 要求 publish_start_date 与 end_date 同一天；start_date 可更早（回看/warmup）。
     daily_csv_mode: bool = False,
 ) -> None:
     """
-    因子主计算（含行情加载、算子、落 CSV、回写 factor_value_files）。
+    因子主计算（含行情加载、算子、落盘、回写 factor_value_files）。
 
     与 P1 / factor_pipeline_job 对接时，推荐优先传 ``factor_ids_override`` / ``universe_override``，
     与单条 job 参数对齐；其余 [factor_engine] 与 [jq] 等仍来自 ``config_file`` 根配置。
 
-    开关 ``skip_if_batch_csv_record_exists`` 默认开启：在计算前查询 ``factor_value_files``，
-    当前任务对应的 ``batch_csv`` / ``daily_csv``（daily_csv_mode 时按 trade_date）索引键，
-    只要已存在任意一行则跳过该因子不落 CSV。
-    配置文件或旧键设为 false（或 CLI ``--no-skip-if-batch-csv-record-exists``）可强制重算。
-    （若启用且同键多条，会先 INFO 跳过并额外 WARNING。）
+    开关 ``skip_if_artifact_record_exists``（ini；默认开启）时的行为：
+    - ``daily_csv_mode`` + ``daily_parquet_bundle_enabled=true``：若入口已检测到存在
+      ``factor_values_parquet/daily/.../factors.parquet`` 则**全日更**直接跳过。
+    - 非 daily：按 ``yearly_parquet`` 是否已覆盖 ``publish_start_date``～``end_date`` 内各自然年需求区间
+      （``date_start`` / ``date_end`` 双侧盖住，见方案文档 §5.4）判断按因子跳过。
+
+    配置文件或 CLI ``--no-skip-if-artifact-record-exists`` 可关闭跳过、强制重算。
     """
     logger.info(
         "启动 factor_engine_runner daily_csv_mode=%s",
@@ -1532,11 +1722,13 @@ def run_factor_engine(
     cfg = Config(config_file=config_file)
 
     start_date = start_date_override or cfg.get("factor_engine", "start_date", fallback="2024-01-01")
-    end_date = end_date_override or cfg.get(
-        "factor_engine",
-        "end_date",
-        fallback=datetime.now().strftime("%Y-%m-%d"),
-    )
+
+    # 缺省键、或 ini 写成空串 / 仅空白：均回落为当天（机器日历日 YYYY-MM-DD）。
+    _end_default = datetime.now().strftime("%Y-%m-%d")
+    if end_date_override is not None:
+        end_date = str(end_date_override).strip() or _end_default
+    else:
+        end_date = str(cfg.get("factor_engine", "end_date", fallback=_end_default)).strip() or _end_default
     if publish_start_date_override is not None:
         publish_start_date = publish_start_date_override
     elif daily_csv_mode:
@@ -1599,16 +1791,29 @@ def run_factor_engine(
     if stage not in ("candidate", "production", "deprecated"):
         raise ValueError(f"配置错误：factor_engine.stage 不合法（{stage}）")
 
-    # 优先读新键 skip_if_batch_csv_record_exists；若无则兼容旧键 skip_if_batch_csv_duplicate；均无则默认「开」。
-    if skip_if_batch_csv_record_exists_override is None:
-        v = cfg.getboolean("factor_engine", "skip_if_batch_csv_record_exists", fallback=None)
-        if v is None:
-            v = cfg.getboolean("factor_engine", "skip_if_batch_csv_duplicate", fallback=None)
-        if v is None:
-            v = True
-        skip_if_batch_csv_record_exists = bool(v)
+    # skip_if_artifact_record_exists：未写配置项时默认 true（幂等跳过开启）。
+    if skip_if_artifact_record_exists_override is None:
+        skip_if_artifact_record_exists = bool(
+            cfg.getboolean("factor_engine", "skip_if_artifact_record_exists", fallback=True)
+        )
     else:
-        skip_if_batch_csv_record_exists = bool(skip_if_batch_csv_record_exists_override)
+        skip_if_artifact_record_exists = bool(skip_if_artifact_record_exists_override)
+
+    # Parquet 主存储：按年合并写盘 + yearly_parquet 索引（非日更模式必须开启，已不再写 batch CSV）。
+    yearly_parquet_enabled = bool(
+        cfg.getboolean("factor_engine", "yearly_parquet_enabled", fallback=True)
+    )
+
+    if (not daily_csv_mode) and (not yearly_parquet_enabled):
+        logger.error(
+            "非日更模式须开启 yearly_parquet_enabled：已不再提供 CSV 批量主链路。"
+        )
+        return
+
+    # 日更多因子 Parquet：单日单 universe 写 factors.parquet + manifest。
+    daily_parquet_bundle_enabled = bool(
+        cfg.getboolean("factor_engine", "daily_parquet_bundle_enabled", fallback=True)
+    )
 
     # 黑名单：配置里可选的 skip_factor_ids，用逗号分隔
     skip_ids_raw = cfg.get("factor_engine", "skip_factor_ids", fallback="").strip()
@@ -1622,7 +1827,9 @@ def run_factor_engine(
         f"配置 - start_date={start_date}, end_date={end_date}, publish_start_date={publish_start_date}, "
         f"factor_ids={factor_ids or 'ALL'}, universe={universe}, "
         f"batch_id={batch_id}, stage={stage}, is_rebase={is_rebase}, "
-        f"skip_if_batch_csv_record_exists={skip_if_batch_csv_record_exists}"
+        f"skip_if_artifact_record_exists={skip_if_artifact_record_exists}, "
+        f"yearly_parquet_enabled={yearly_parquet_enabled}, "
+        f"daily_parquet_bundle_enabled={daily_parquet_bundle_enabled}"
     )
 
     all_factors = load_all_factors()
@@ -1665,6 +1872,24 @@ def run_factor_engine(
         compute_workers,
     )
 
+    # 开启跳过时：已存在 bundle 则不再拉行情与计算（日更幂等）。
+    project_root_pre = Path(__file__).resolve().parents[2]
+    if (
+        daily_csv_mode
+        and daily_parquet_bundle_enabled
+        and skip_if_artifact_record_exists
+    ):
+        pub_iso_pre = str(publish_start_date).strip()[:10]
+        bf = _daily_parquet_bundle_path(project_root_pre, universe, pub_iso_pre)
+        if bf.is_file():
+            logger.info(
+                "跳过全日更：已存在 daily parquet bundle universe=%s trade_date=%s path=%s",
+                universe,
+                pub_iso_pre,
+                bf,
+            )
+            return
+
     # 拉行情：非 ALL 时在 SQL 侧按股票池过滤，避免全市场进内存（见 _load_stock_daily）
     price_df = _load_stock_daily(
         config_file=config_file,
@@ -1683,63 +1908,54 @@ def run_factor_engine(
 
     try:
         compute_factor_tasks: List[Tuple[str, str, str]] = []
+        # 日更：各因子长表片段，循环结束后合并写 factors.parquet + manifest.json。
+        daily_bundle_parts: List[pl.DataFrame] = []
+
+        # yearly 跳过：与 parquet 内 trade_date 对齐，按 stock_daily 求各年实际首尾交易日（避免日历日假阴性）。
+        yearly_trading_bounds: Optional[Dict[int, Tuple[date, date]]] = None
+        if (
+            yearly_parquet_enabled
+            and skip_if_artifact_record_exists
+            and (not daily_csv_mode)
+        ):
+            ds_pb = date.fromisoformat(str(publish_start_date).strip()[:10])
+            de_pb = date.fromisoformat(str(end_date).strip()[:10])
+            yearly_trading_bounds = _yearly_publish_trading_bounds_by_year(
+                session,
+                pub_start=ds_pb,
+                pub_end=de_pb,
+            )
+            logger.info(
+                "yearly_parquet 跳过判定：已预取 stock_daily 各年交易日边界 %s",
+                yearly_trading_bounds,
+            )
 
         for factor in factors:
             logger.info(f"开始计算因子: {factor.factor_id} - {factor.factor_name}")
 
             # 可选：若 factor_value_files 已存在当前任务索引行，则跳过计算（便于幂等重跑）。
-            if skip_if_batch_csv_record_exists:
-                if daily_csv_mode:
-                    td_key = date.fromisoformat(str(end_date).strip()[:10])
-                    row_ids = _factor_value_files_daily_csv_ids_for_trade_date(
-                        session,
-                        factor_id=factor.factor_id,
-                        universe=universe,
-                        trade_date=td_key,
+            # 日更整任务跳过已在入口按 factors.parquet 处理；此处仅处理非日更 yearly 覆盖判定。
+            if skip_if_artifact_record_exists and (not daily_csv_mode):
+                ds_key = date.fromisoformat(str(publish_start_date).strip()[:10])
+                de_key = date.fromisoformat(str(end_date).strip()[:10])
+
+                if _yearly_parquet_publish_range_fully_covered(
+                    session,
+                    factor_id=factor.factor_id,
+                    universe=universe,
+                    pub_start=ds_key,
+                    pub_end=de_key,
+                    trading_bounds_by_year=yearly_trading_bounds,
+                ):
+                    logger.info(
+                        "跳过因子计算：yearly_parquet 已覆盖 publish 各年（按 stock_daily 交易日边界）。"
+                        "factor_id=%s universe=%s publish_start=%s end=%s",
+                        factor.factor_id,
+                        universe,
+                        ds_key.isoformat(),
+                        de_key.isoformat(),
                     )
-                    if len(row_ids) >= 1:
-                        logger.info(
-                            "跳过因子计算：factor_value_files 已存在 daily_csv 索引记录。"
-                            "factor_id=%s universe=%s trade_date=%s row_count=%s ids=%s",
-                            factor.factor_id,
-                            universe,
-                            td_key.isoformat(),
-                            len(row_ids),
-                            row_ids,
-                        )
-                        if len(row_ids) > 1:
-                            logger.warning(
-                                "factor_value_files 同一 daily_csv 键存在多条记录（数据异常，应唯一）：ids=%s",
-                                row_ids,
-                            )
-                        continue
-                else:
-                    ds_key = date.fromisoformat(str(publish_start_date).strip()[:10])
-                    de_key = date.fromisoformat(str(end_date).strip()[:10])
-                    row_ids = _factor_value_files_batch_csv_ids_for_job_key(
-                        session,
-                        factor_id=factor.factor_id,
-                        universe=universe,
-                        date_start=ds_key,
-                        date_end=de_key,
-                    )
-                    if len(row_ids) >= 1:
-                        logger.info(
-                            "跳过因子计算：factor_value_files 已存在 batch_csv 索引记录。"
-                            "factor_id=%s universe=%s date_start=%s date_end=%s row_count=%s ids=%s",
-                            factor.factor_id,
-                            universe,
-                            ds_key.isoformat(),
-                            de_key.isoformat(),
-                            len(row_ids),
-                            row_ids,
-                        )
-                        if len(row_ids) > 1:
-                            logger.warning(
-                                "factor_value_files 同一 batch_csv 自然键存在多条记录（数据异常，应唯一）：ids=%s",
-                                row_ids,
-                            )
-                        continue
+                    continue
 
             # 计算前先做公式静态校验：仅将“可翻译”的公式送入并行计算队列。
             try:
@@ -1843,58 +2059,66 @@ def run_factor_engine(
                 f"{df_out.head().to_string(index=False)}"
             )
 
-            # 导出 CSV：batch 沿用 by_universe 区间文件名；daily_csv_mode 与同仓库 daily_factor_values 路径一致。
+            # 落盘：日更写 bundle 片段；批量写 yearly_parquet。
             publish_iso = str(publish_start_date).strip()[:10]
-            if daily_csv_mode:
-                output_dir = os.path.join(
-                    "factor_values",
-                    "daily",
-                    "by_universe",
-                    universe,
-                    publish_iso,
-                )
-                csv_name = f"{factor_id}.csv"
-            else:
-                output_dir = os.path.join("factor_values", "by_universe", universe)
-                csv_name = (
-                    f"{factor_id}_{universe}_{publish_start_date}_{end_date}.csv"
-                    .replace(":", "")
-                    .replace(" ", "")
-                )
-
-            os.makedirs(output_dir, exist_ok=True)
-            csv_path = os.path.join(output_dir, csv_name)
-            df_out.to_csv(csv_path, index=False)
-            logger.info(f"因子 {factor_id} 结果已导出到 CSV: {csv_path}")
-
-            # 回写 factor_value_files（batch_csv / daily_csv）
-            try:
-                rel_path = Path(csv_path).resolve().relative_to(project_root).as_posix()
-            except ValueError:
-                rel_path = Path(csv_path).as_posix()
 
             try:
                 if daily_csv_mode:
-                    _upsert_factor_value_files_daily_csv(
-                        session,
-                        factor_id=factor_id,
-                        universe=universe,
-                        rel_path_posix=rel_path,
-                        trade_date=publish_iso,
-                    )
+                    if daily_parquet_bundle_enabled and (not df_out.empty):
+                        bp = pl.from_pandas(df_out[["trade_date", "stock_code", "factor_value"]])
+                        bp = bp.with_columns(
+                            [
+                                pl.col("trade_date").cast(pl.Date),
+                                pl.col("stock_code").cast(pl.Utf8),
+                                pl.col("factor_value").cast(pl.Float64),
+                                pl.lit(factor_id).cast(pl.Utf8).alias("factor_id"),
+                            ]
+                        )
+                        daily_bundle_parts.append(bp)
                 else:
-                    _upsert_factor_value_file(
-                        session,
-                        factor_id=factor_id,
-                        factor_name=factor_name,
-                        universe=universe,
-                        rel_path=rel_path,
-                        date_start=publish_start_date,
-                        date_end=end_date,
-                        batch_id=batch_id,
-                        stage=stage,
-                        is_rebase=is_rebase,
-                    )
+                    if df_out.empty:
+                        logger.warning(
+                            "因子业务区间无输出行，跳过落盘 factor_id=%s publish=%s..%s",
+                            factor_id,
+                            publish_start_date,
+                            end_date,
+                        )
+                    else:
+                        df_y = df_out.copy()
+                        df_y["_cal_year"] = df_y["trade_date"].dt.year
+
+                        for cal_year, grp in df_y.groupby("_cal_year", sort=True):
+                            g = grp.drop(columns=["_cal_year"])
+                            y_int = int(cal_year)
+                            rel_p, ds_d, de_d = _merge_write_yearly_parquet_long(
+                                project_root=project_root,
+                                universe=universe,
+                                factor_id=factor_id,
+                                year=y_int,
+                                df_new=g,
+                            )
+                            _upsert_factor_value_file_yearly_parquet(
+                                session,
+                                factor_id=factor_id,
+                                factor_name=factor_name,
+                                universe=universe,
+                                rel_path=rel_p,
+                                year=y_int,
+                                date_start=ds_d,
+                                date_end=de_d,
+                                batch_id=batch_id,
+                                stage=stage,
+                                is_rebase=is_rebase,
+                            )
+                            logger.info(
+                                "因子 yearly_parquet 已写入 factor_id=%s year=%s rel_path=%s date_start=%s date_end=%s",
+                                factor_id,
+                                y_int,
+                                rel_p,
+                                ds_d.isoformat(),
+                                de_d.isoformat(),
+                            )
+
                 # 每个因子独立提交，提升可观测性与容错性：
                 # - 中途可在 DB 看到已完成因子
                 # - 单因子失败不会回滚此前成功写入
@@ -1902,11 +2126,24 @@ def run_factor_engine(
             except Exception as e:
                 # 不中断主计算；记录错误供后续补写。
                 logger.error(
-                    f"写入 factor_value_files 失败，factor_id={factor_id}, "
-                    f"universe={universe}, path={rel_path}, err={e}"
+                    f"写入 factor_value_files / parquet 失败，factor_id={factor_id}, "
+                    f"universe={universe}, err={e}"
                 )
                 # 避免 session 落入 aborted 状态影响后续因子；这里显式回滚到干净状态。
                 session.rollback()
+
+        if (
+            daily_csv_mode
+            and daily_parquet_bundle_enabled
+            and daily_bundle_parts
+        ):
+            _write_daily_parquet_bundle_and_manifest(
+                project_root=project_root,
+                universe=universe,
+                publish_iso=str(publish_start_date).strip()[:10],
+                parts=daily_bundle_parts,
+                batch_id=batch_id,
+            )
     except Exception:
         session.rollback()
         raise
@@ -1951,30 +2188,31 @@ def main():
         help="显式覆写 [factor_engine].universe（如 ALL/HS300），与 run_factor_engine(universe_override=...) 一致；不传则读配置",
     )
     parser.add_argument(
-        "--skip-if-batch-csv-record-exists",
+        "--skip-if-artifact-record-exists",
         action="store_true",
-        help="明确开启（默认即已开启）：已存在 batch_csv 索引则跳过；与 --no-skip-if-batch-csv-record-exists 勿同用",
+        help="明确开启（默认即已开启）：已存在 Parquet 产物则跳过；与 --no-skip-if-artifact-record-exists 勿同用",
     )
     parser.add_argument(
-        "--no-skip-if-batch-csv-record-exists",
+        "--no-skip-if-artifact-record-exists",
         action="store_true",
-        help="覆盖为关闭：照常计算并写库（即使 factor_value_files 已有该键索引）",
+        help="覆盖为关闭：照常计算并写库（忽略 yearly 覆盖 / 日更 bundle 存在性跳过）",
     )
     parser.add_argument(
         "--daily-csv",
         action="store_true",
         help=(
-            "日更模式：CSV 写入 factor_values/daily/by_universe/<universe>/<YYYY-MM-DD>/<factor>.csv；"
-            "factor_value_files.artifact_type=daily_csv（与 factor_export 中 daily_override_batch 对齐）。"
+            "日更模式：写 factor_values_parquet/daily/by_universe/<universe>/<YYYY-MM-DD>/factors.parquet + manifest。"
             "发布日为 --end-date；--start-date 可更早用于 Warmup。"
         ),
     )
     args = parser.parse_args()
 
     is_rebase_override: Optional[bool] = None
-    if args.skip_if_batch_csv_record_exists and args.no_skip_if_batch_csv_record_exists:
+    skip_on_cli = bool(args.skip_if_artifact_record_exists)
+    skip_off_cli = bool(args.no_skip_if_artifact_record_exists)
+    if skip_on_cli and skip_off_cli:
         raise SystemExit(
-            "错误：--skip-if-batch-csv-record-exists 与 --no-skip-if-batch-csv-record-exists 不能同时使用"
+            "错误：--skip-if-artifact-record-exists 与 --no-skip-if-artifact-record-exists 不能同时使用"
         )
 
     if args.is_rebase and args.no_rebase:
@@ -1997,9 +2235,9 @@ def main():
             raise SystemExit("错误：--universe 不能为全空白，或不要传此参数以使用配置文件")
         universe_arg = s
 
-    if args.skip_if_batch_csv_record_exists:
+    if skip_on_cli:
         skip_csv_record_override_flag: Optional[bool] = True
-    elif args.no_skip_if_batch_csv_record_exists:
+    elif skip_off_cli:
         skip_csv_record_override_flag = False
     else:
         skip_csv_record_override_flag = None
@@ -2016,7 +2254,7 @@ def main():
         is_rebase_override=is_rebase_override,
         factor_ids_override=factor_ids_arg,
         universe_override=universe_arg,
-        skip_if_batch_csv_record_exists_override=skip_csv_record_override_flag,
+        skip_if_artifact_record_exists_override=skip_csv_record_override_flag,
         daily_csv_mode=bool(args.daily_csv),
     )
 

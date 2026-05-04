@@ -23,7 +23,7 @@ logger = setup_logger("factor_incremental_runner", "logs/factor_incremental_runn
 
 
 def _get_last_batch_end_date(config_file: str, universe: str) -> Optional[str]:
-    """读取指定 universe 下主链 stage（candidate/production）batch_csv 的最大 date_end。"""
+    """读取指定 universe 下主链 stage（candidate/production）yearly_parquet 的最大 date_end。"""
     db_manager = get_db_manager(config_file=config_file)
     session = db_manager.get_session()
     try:
@@ -33,7 +33,7 @@ def _get_last_batch_end_date(config_file: str, universe: str) -> Optional[str]:
                 SELECT MAX(date_end) AS max_date_end
                 FROM factor_value_files
                 WHERE universe = :universe
-                  AND artifact_type = 'batch_csv'
+                  AND artifact_type = 'yearly_parquet'
                   AND stage IN ('candidate', 'production')
                 """
             ),
@@ -181,7 +181,7 @@ def run_factor_incremental(
             )
         else:
             logger.warning(
-                "未找到主链 stage 的历史 batch_csv，回退 base_start_date=%s（可能为新增因子或首次建基线）",
+                "未找到主链 stage 的历史 yearly_parquet，回退 base_start_date=%s（可能为新增因子或首次建基线）",
                 base_start_date,
             )
             run_start_date = base_start_date

@@ -273,7 +273,6 @@ model.save_model("lgb_factor_model.txt")
 - 增量编排入口：`src/factor_incremental/factor_incremental_runner.py`
 - 日更入口：`src/daily_factor_values/daily_factor_values_runner.py`
 - 路径索引读取：`src/common/factor_value_files_batch.py`
-- 兼容旧列同步：`src/backtest_io/sync_factor_values_path_runner.py`
 - 数据库约定：`docs/complete/db_conventions.md`
 - 增量规则：`docs/因子值增量方案_v1.md`
 

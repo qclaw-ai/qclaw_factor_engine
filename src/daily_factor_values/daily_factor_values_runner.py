@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-日更线：按「因子值所属交易日 T」生成单日因子长表 CSV，并更新日更路径元数据。
+日更线：按「因子值所属交易日 T」跑 factor_engine（daily_csv_mode），产出多因子 Parquet + manifest。
 
-- 主登记：factor_value_files（artifact_type=daily_csv, 含 universe 维度）。
+- 主产物（默认）：factor_values_parquet/daily/by_universe/{UNIVERSE}/{T}/factors.parquet + manifest.json。
 - 与评估线隔离：不修改 factor_values_path（月更/大回测由 backtest_io 维护）。
 - 计算链路：对齐 factor_incremental_runner（收成 end_date → 交易日 warmup 窗口 → factor_engine_runner daily_csv_mode）。
 """
@@ -186,7 +186,7 @@ def run_daily_factor_values(
         is_rebase_override=False,
         factor_ids_override=fid_list,
         universe_override=u_tag,
-        skip_if_batch_csv_record_exists_override=None,
+        skip_if_artifact_record_exists_override=None,
         daily_csv_mode=True,
     )
 

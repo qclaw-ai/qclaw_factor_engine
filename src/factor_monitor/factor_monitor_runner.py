@@ -266,31 +266,47 @@ def _judge_status(rec: dict, th: Thresholds) -> dict:
     return rec
 
 
-def _load_daily_csv_for_parity(
+def _load_daily_parquet_bundle_slice_for_parity(
     factor_root: Path,
     *,
     universe: str,
     trade_date: str,
     factor_id: str,
 ) -> pd.DataFrame:
-    """读取单因子单日 `daily_csv`（用于生产一致性对账）。"""
+    """从日更 bundle ``factors.parquet`` 读取单因子截面（用于生产一致性对账）。"""
     p = (
         factor_root
-        / "factor_values"
+        / "factor_values_parquet"
         / "daily"
         / "by_universe"
         / universe
         / trade_date
-        / f"{factor_id}.csv"
+        / "factors.parquet"
     )
     if not p.exists():
         raise FileNotFoundError(str(p))
-    df = pd.read_csv(p)
+
+    df = pd.read_parquet(p)
+    cols = set(df.columns)
+
+    if "factor_id" not in cols:
+        raise ValueError(f"daily bundle 缺列 factor_id: {p}")
+
+    if "trade_date" not in cols and "date" in cols:
+        df = df.rename(columns={"date": "trade_date"})
+
     required = {"trade_date", "stock_code", "factor_value"}
     miss = sorted(required - set(df.columns))
+
     if miss:
-        raise ValueError(f"daily_csv 缺列 {miss}: {p}")
-    return df[["trade_date", "stock_code", "factor_value"]].copy()
+        raise ValueError(f"daily bundle 缺列 {miss}: {p}")
+
+    out = df.loc[df["factor_id"].astype(str) == str(factor_id), ["trade_date", "stock_code", "factor_value"]].copy()
+
+    if out.empty:
+        raise ValueError(f"daily bundle 中无 factor_id={factor_id}: {p}")
+
+    return out
 
 
 def _build_parity_check(
@@ -304,11 +320,11 @@ def _build_parity_check(
     tolerance: float,
     random_seed: int,
 ) -> dict:
-    """执行 `daily_csv` 抽检对账。
+    """执行日更 ``factors.parquet`` bundle 抽检对账。
 
     做法:
     - 随机采样若干因子与日期
-    - 对比 DB 自算与生产 `daily_csv` 的 `factor_value`
+    - 对比 DB 自算与生产 bundle 中的 ``factor_value``
     - 输出误差分位、匹配率及缺失/错误列表
     """
     rng = random.Random(random_seed)
@@ -331,7 +347,7 @@ def _build_parity_check(
         for d in sample_days:
             checked += 1
             try:
-                prod_df = _load_daily_csv_for_parity(
+                prod_df = _load_daily_parquet_bundle_slice_for_parity(
                     factor_root,
                     universe=universe,
                     trade_date=d,
@@ -441,7 +457,7 @@ def run_factor_monitor(config_file: str, as_of_date: str | None = None) -> dict:
     1) 读配置/阈值/候选因子
     2) 加载行情并计算监控窗口 + 预热窗口
     3) 逐因子自算 + 指标统计 + 阈值判定
-    4) 抽检 `daily_csv` 做生产一致性对账
+    4) 抽检日更 ``factors.parquet`` bundle 做生产一致性对账
     5) 输出 JSON/MD 报告
     """
     total_t0 = time.perf_counter()

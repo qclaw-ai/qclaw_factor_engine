@@ -38,6 +38,13 @@ factor_ids = FACTOR_DEMO_0001
   - 为空：对 `factor_docs` 解析到的 **所有因子** 逐个计算；
   - 非空：只计算指定的部分因子。
 
+#### 1.3 Parquet 主存储（当前唯一主链路）
+
+- **主产物（批量、非日更）**：年度长表 Parquet，路径约定见 `docs/因子工厂_Parquet主存储改造方案_v1.md`；`factor_value_files.artifact_type = yearly_parquet`。非日更须 `yearly_parquet_enabled=true`，否则引擎记录错误并退出。
+- **`skip_if_artifact_record_exists`**（默认 `true`）：幂等跳过。批量：按 `yearly_parquet` 是否已覆盖 publish 各年；日更：入口若已存在 `factors.parquet` 则全任务跳过。CLI：`--no-skip-if-artifact-record-exists` 强制重算。
+- **`daily_parquet_bundle_enabled`**：日更写 `factor_values_parquet/daily/.../factors.parquet` + `manifest.json`（见 `src/daily_factor_values/README.md`；`--daily-csv` 仅为历史 CLI 开关名）。
+- **已不再提供**：`write_csv_fallback`、`skip_fallback_batch_csv`、`daily_csv_fallback` 等 CSV 主写 ini 项。
+
 > 生产环境建议：`config.ini` 与 `config_dev.ini` 分开维护，`start_date/end_date` 仅在“批量重算/初始化”时使用，日常调度可交给上层参数控制（见 3.2）。
 
 ---
@@ -63,9 +70,7 @@ factor_ids = FACTOR_DEMO_0001
      - 对截面做 Z-score 标准化。
 6. 输出：
    - 日志中打印每个因子的前 5 行样例；
-   - 将完整结果导出为 CSV：
-     - 路径：`factor_engine/output/<factor_id>_<start_date>_<end_date>.csv`
-     - 列：`trade_date, stock_code, factor_value`。
+   - 将业务区间内的结果按日历年合并写入 `factor_values_parquet/yearly/by_universe/{UNIVERSE}/{factor_id}/{factor_id}-{year}.parquet`（长表列 `trade_date, stock_code, factor_value`），并 upsert `factor_value_files`（`artifact_type=yearly_parquet`）。
 
 ---
 
@@ -123,10 +128,10 @@ python factor_engine/factor_engine_runner.py
 
 ### 4. 后续对接回测与入库
 
-- 目前 `factor_engine` 只负责生成标准化后的因子值并导出 CSV，尚未将结果写入数据库。  
-- 后续 `backtest_core` 会基于相同的 `(trade_date, stock_code, factor_value)` 结构计算 IC / 分层收益等指标；  
+- `factor_engine` 将标准化后的因子值写入 **Parquet 主文件**，并在 `factor_value_files` 登记 `yearly_parquet` 路径。  
+- `backtest_core` 会基于相同的 `(trade_date, stock_code, factor_value)` 结构计算 IC / 分层收益等指标；  
 - `backtest_io` 则负责将回测结果落地为 JSON 和 `factor_backtest` 记录；  
 - `selection_and_store` 再根据阈值表 `factor_threshold_config` 决定是否将该因子写入 `factor_basic` / `factor_files`。
 
-当前阶段只要保证：**给定某个因子 ID，就能稳定输出一份 CSV 因子序列**，后续模块就有了可靠输入。
+当前阶段只要保证：**给定某个因子 ID，能稳定产出长表因子序列**（Parquet），后续模块即可消费。
 

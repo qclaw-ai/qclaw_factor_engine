@@ -4,8 +4,8 @@
 """
 历史初始化回填脚本（bootstrap）：
 
-- 按月调用 run_factor_export_parquet.py（默认 batch-only）
-- 每个月导出后调用 validate_factor_export.py 做校验
+- 按月调用 ``src/factor_export_cos/factor_export_runner.py``（DB 中优先 yearly_parquet，无则 batch_csv）
+- 每个月导出后调用 ``scripts/validate_factor_export.py`` 做校验（支持 yearly 源抽样）
 - 输出成功/失败月份清单，便于重跑失败月
 """
 

@@ -221,3 +221,5 @@ __marimo__/
 lgb_factor_model.txt
 *.parquet
 others/
+factor_values_parquet/
+factor_docs/
